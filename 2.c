@@ -120,10 +120,21 @@ int main() {
 
     // Send storage server information to the naming server
     sendStorageServerInfoToNamingServer(ns_socket, &ss_info);
-    
-
+    char command[10000];
+    if(recv(ns_socket,command,sizeof(command),0) == -1)
+    {
+        perror("Receiving command failed\n");
+    }
+     printf("Received command: %s\n",command);   
+      if (strcmp(command, "CREATE_FILE") == 0) {
+        createFile();
+    } else if (strcmp(command, "CREATE_DIRECTORY") == 0) {
+        createDirectory();
+    } else {
+        printf("Invalid command\n");
+    }
     // Close the naming server socket
-    
+    close(ns_socket);
 
     int ss_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (ss_socket == -1) {
@@ -150,53 +161,30 @@ int main() {
 
     time_t last_accessible_paths_time = time(NULL);
 
-    while (1) {
-        int client_socket = accept(ss_socket, NULL, NULL);
-        if (client_socket == -1) {
-            perror("Accepting client connection failed");
-            close(ss_socket);
-            exit(1);
-        }
+   while (1) {
+    int client_socket = accept(ss_socket, NULL, NULL);
+    if (client_socket == -1) {
+        perror("Accepting client connection failed");
+        continue;  // Continue to the next iteration to keep listening
+    }
 
-        
-        char command[100000];
+    char command[100000];
 
-    if (recv(ss_socket, command, sizeof(command), 0) == -1)
-    {
+    if (recv(client_socket, command, sizeof(command), 0) == -1) {
         perror("Receiving command failed\n");
-        close(ss_socket);
-    }
-    printf("Received command: %s\n", command);
-    if (strcmp(command, "CREATE_FILE") == 0)
-    {
-        createFile();
-    }
-    else if (strcmp(command, "CREATE_DIRECTORY") == 0)
-    {
-        createDirectory();
-    }
-    else
-    {
-        printf("Invalid command\n");
-    }
-    close(ns_socket);
-
-        if (recv(client_socket, command, sizeof(command), 0) == -1) {
-            perror("Receiving command failed\n");
-            close(client_socket);
-            continue;
-        }
-
-        printf("Received command: %s\n", command);
-
-        
         close(client_socket);
-
-        // Check if it's time to send accessible paths to the naming server
-      
+        continue;
     }
 
-    close(ss_socket);
+    printf("Received command: %s\n", command);
 
-    return 0;
+    close(client_socket);
+   
+
+}
+
+// Close the server socket outside the loop
+close(ss_socket);
+
+return 0;
 }
