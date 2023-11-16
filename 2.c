@@ -7,21 +7,24 @@
 #include <arpa/inet.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <time.h>
 
+#define STORAGE_SERVER_PORT 8888
 #define NAMING_SERVER_IP "127.0.0.1"
 #define NAMING_SERVER_PORT 8080
-
+#define MAX_COMMAND_SIZE 1024
+#define ACCESSIBLE_PATHS_INTERVAL 60 // Send accessible paths every 60 seconds
 struct StorageServerInfo {
     char ip_address[16];
     int nm_port;
     int client_port;
-    char accessible_paths[1024]; // Adjust the size as needed
+    char accessible_paths[4096];
 };
-
 // Function to recursively collect accessible paths
 void collectAccessiblePaths(const char *dir_path, char *accessible_paths, int *pos, int size) {
     DIR *dir = opendir(dir_path);
     if (!dir) {
+        perror("Opening directory failed");
         return;
     }
 
@@ -53,9 +56,40 @@ void collectAccessiblePaths(const char *dir_path, char *accessible_paths, int *p
     closedir(dir);
 }
 
+void createFile() {
+    FILE *file = fopen("new_file.txt", "w");
+    if (file == NULL) {
+        perror("File creation failed");
+    }
+    fclose(file);
+    printf("Empty file created: new_file.txt\n");
+}
+
+void createDirectory() {
+    if (mkdir("new_directory", 0777) == -1) {
+        perror("Directory creation failed");
+    }
+    printf("Empty directory created: new_directory\n");
+}
+
+void sendStorageServerInfoToNamingServer(int ns_socket, const struct StorageServerInfo *ss_info) {
+    char request_type = 'I';
+    if (send(ns_socket, &request_type, sizeof(request_type), 0) == -1) {
+        perror("Sending request type to naming server failed");
+        close(ns_socket);
+        exit(1);
+    }
+
+    if (send(ns_socket, ss_info, sizeof(struct StorageServerInfo), 0) == -1) {
+        perror("Sending storage server info to naming server failed");
+        close(ns_socket);
+        exit(1);
+    }
+}
+
 int main() {
-    int ss_socket = socket(AF_INET, SOCK_STREAM, 0);
-    if (ss_socket == -1) {
+    int ns_socket = socket(AF_INET, SOCK_STREAM, 0);
+    if (ns_socket == -1) {
         perror("Socket creation failed");
         exit(1);
     }
@@ -65,48 +99,102 @@ int main() {
     ns_address.sin_port = htons(NAMING_SERVER_PORT);
     ns_address.sin_addr.s_addr = inet_addr(NAMING_SERVER_IP);
 
-    if (connect(ss_socket, (struct sockaddr *)&ns_address, sizeof(ns_address)) == -1) {
+    if (connect(ns_socket, (struct sockaddr *)&ns_address, sizeof(ns_address)) == -1) {
         perror("Connection to the naming server failed");
-        close(ss_socket);
+        close(ns_socket);
         exit(1);
     }
 
     // Collect accessible paths
-    char accessible_paths[4096]; // Adjust the size as needed
+    char accessible_paths[4096];
     int current_pos = 0;
     collectAccessiblePaths(".", accessible_paths, &current_pos, sizeof(accessible_paths));
-    accessible_paths[current_pos] = '\0'; // Null-terminate the string
+    accessible_paths[current_pos] = '\0';
 
-    // Prepare and send storage server details with accessible paths
+    // Prepare storage server information
     struct StorageServerInfo ss_info;
-    strcpy(ss_info.ip_address, "192.168.1.100");
-    ss_info.nm_port = 8888;
-    ss_info.client_port = 11; // Placeholder for now
+    strcpy(ss_info.ip_address, "127.0.0.1"); // Update with the actual IP
+    ss_info.nm_port = NAMING_SERVER_PORT;    // Update with the actual port
+    ss_info.client_port = STORAGE_SERVER_PORT;
     strcpy(ss_info.accessible_paths, accessible_paths);
 
-    // Send the request type 'I' to the naming server
-    char request_type = 'I';
-    if (send(ss_socket, &request_type, sizeof(request_type), 0) == -1) {
-        perror("Sending request type to naming server failed");
+    // Send storage server information to the naming server
+    sendStorageServerInfoToNamingServer(ns_socket, &ss_info);
+    
+
+    // Close the naming server socket
+    
+
+    int ss_socket = socket(AF_INET, SOCK_STREAM, 0);
+    if (ss_socket == -1) {
+        perror("Socket creation failed");
+        exit(1);
+    }
+
+    struct sockaddr_in ss_address;
+    ss_address.sin_family = AF_INET;
+    ss_address.sin_port = htons(STORAGE_SERVER_PORT);
+    ss_address.sin_addr.s_addr = INADDR_ANY;
+
+    if (bind(ss_socket, (struct sockaddr *)&ss_address, sizeof(ss_address)) == -1) {
+        perror("Bind failed");
         close(ss_socket);
         exit(1);
     }
 
-    // Send the storage server information
-    if (send(ss_socket, &ss_info, sizeof(ss_info), 0) == -1) {
-        perror("Sending storage server info to naming server failed");
+    if (listen(ss_socket, 5) == -1) {
+        perror("Listen failed");
         close(ss_socket);
         exit(1);
     }
 
-    // Receive the client port from the naming server
-    if (recv(ss_socket, &ss_info.client_port, sizeof(ss_info.client_port), 0) == -1) {
-        perror("Receiving client port from naming server failed");
-        close(ss_socket);
-        exit(1);
-    }
+    time_t last_accessible_paths_time = time(NULL);
 
-    printf("Client Port: %d\n", ss_info.client_port);
+    while (1) {
+        int client_socket = accept(ss_socket, NULL, NULL);
+        if (client_socket == -1) {
+            perror("Accepting client connection failed");
+            close(ss_socket);
+            exit(1);
+        }
+
+        
+        char command[100000];
+
+    if (recv(ss_socket, command, sizeof(command), 0) == -1)
+    {
+        perror("Receiving command failed\n");
+        close(ss_socket);
+    }
+    printf("Received command: %s\n", command);
+    if (strcmp(command, "CREATE_FILE") == 0)
+    {
+        createFile();
+    }
+    else if (strcmp(command, "CREATE_DIRECTORY") == 0)
+    {
+        createDirectory();
+    }
+    else
+    {
+        printf("Invalid command\n");
+    }
+    close(ns_socket);
+
+        if (recv(client_socket, command, sizeof(command), 0) == -1) {
+            perror("Receiving command failed\n");
+            close(client_socket);
+            continue;
+        }
+
+        printf("Received command: %s\n", command);
+
+        
+        close(client_socket);
+
+        // Check if it's time to send accessible paths to the naming server
+      
+    }
 
     close(ss_socket);
 
