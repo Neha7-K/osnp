@@ -35,8 +35,7 @@ int main() {
         exit(1);
     }
 
-    // Send the path to the naming server
-    char path[] = "./1.c"; // Change this to the desired path
+    char path[] = "./1.c"; 
     if (send(client_socket, path, sizeof(path), 0) == -1) {
         perror("Sending path to naming server failed");
         close(client_socket);
