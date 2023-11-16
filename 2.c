@@ -10,6 +10,8 @@
 
 #define NAMING_SERVER_IP "127.0.0.1"
 #define NAMING_SERVER_PORT 8080
+#define MAX_COMMAND_SIZE 1024
+
 
 struct StorageServerInfo {
     char ip_address[16];
@@ -18,11 +20,27 @@ struct StorageServerInfo {
     char accessible_paths[1024]; // Adjust the size as needed
 };
 
+void createFile() {
+    FILE *file = fopen("new_file.txt", "w");
+    if (file == NULL) {
+        perror("File creation failed");
+        
+    }
+    fclose(file);
+    printf("Empty file created: new_file.txt\n");
+}
+
+void createDirectory() {
+    if (mkdir("new_directory", 0777) == -1) {
+        perror("Directory creation failed");
+    }
+    printf("Empty directory created: new_directory\n");
+}
+
 // Function to recursively collect accessible paths
 void collectAccessiblePaths(const char *dir_path, char *accessible_paths, int *pos, int size) {
     DIR *dir = opendir(dir_path);
     if (!dir) {
-        return;
     }
 
     struct dirent *entry;
@@ -57,18 +75,18 @@ int main() {
     int ss_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (ss_socket == -1) {
         perror("Socket creation failed");
-        exit(1);
+
     }
 
     struct sockaddr_in ns_address;
-    ns_address.sin_family = AF_INET;
+    ns_address.sin_family = AF_INET;    
     ns_address.sin_port = htons(NAMING_SERVER_PORT);
     ns_address.sin_addr.s_addr = inet_addr(NAMING_SERVER_IP);
 
     if (connect(ss_socket, (struct sockaddr *)&ns_address, sizeof(ns_address)) == -1) {
         perror("Connection to the naming server failed");
         close(ss_socket);
-        exit(1);
+
     }
 
     // Collect accessible paths
@@ -89,26 +107,33 @@ int main() {
     if (send(ss_socket, &request_type, sizeof(request_type), 0) == -1) {
         perror("Sending request type to naming server failed");
         close(ss_socket);
-        exit(1);
     }
 
     // Send the storage server information
     if (send(ss_socket, &ss_info, sizeof(ss_info), 0) == -1) {
         perror("Sending storage server info to naming server failed");
         close(ss_socket);
-        exit(1);
+   
     }
 
-    // Receive the client port from the naming server
-    if (recv(ss_socket, &ss_info.client_port, sizeof(ss_info.client_port), 0) == -1) {
-        perror("Receiving client port from naming server failed");
+  
+  
+    char command[100000];
+    
+     if (recv(ss_socket, command, sizeof(command), 0) == -1) {
+        perror("Receiving command failed\n");
         close(ss_socket);
-        exit(1);
+    }
+    printf("Received command: %s\n",command);   
+      if (strcmp(command, "CREATE_FILE") == 0) {
+        createFile();
+    } else if (strcmp(command, "CREATE_DIRECTORY") == 0) {
+        createDirectory();
+    } else {
+        printf("Invalid command\n");
     }
 
-    printf("Client Port: %d\n", ss_info.client_port);
-
-    close(ss_socket);
+   close(ss_socket);
 
     return 0;
 }
