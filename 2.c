@@ -5,6 +5,7 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <pthread.h>
 #include <dirent.h>
 #include <sys/stat.h>
 #include <time.h>
@@ -13,13 +14,15 @@
 #define NAMING_SERVER_IP "127.0.0.1"
 #define NAMING_SERVER_PORT 8080
 #define MAX_COMMAND_SIZE 1024
-#define ACCESSIBLE_PATHS_INTERVAL 60 
+#define ACCESSIBLE_PATHS_INTERVAL 60
+
 struct StorageServerInfo {
     char ip_address[16];
     int nm_port;
     int client_port;
     char accessible_paths[4096];
 };
+
 // Function to recursively collect accessible paths
 void collectAccessiblePaths(const char *dir_path, char *accessible_paths, int *pos, int size) {
     DIR *dir = opendir(dir_path);
@@ -87,6 +90,105 @@ void sendStorageServerInfoToNamingServer(int ns_socket, const struct StorageServ
     }
 }
 
+void *sendInfoToNamingServer(void *arg) {
+    int ns_socket = *((int *)arg);
+
+    // Collect accessible paths
+    char accessible_paths[4096];
+    int current_pos = 0;
+    collectAccessiblePaths(".", accessible_paths, &current_pos, sizeof(accessible_paths));
+    accessible_paths[current_pos] = '\0';
+
+    // Prepare storage server information
+    struct StorageServerInfo ss_info;
+    strcpy(ss_info.ip_address, "127.0.0.1"); // Update with the actual IP
+    ss_info.nm_port = NAMING_SERVER_PORT;    // Update with the actual port
+    ss_info.client_port = STORAGE_SERVER_PORT;
+    strcpy(ss_info.accessible_paths, accessible_paths);
+
+    // Send request type to the naming server
+    char request_type = 'I';
+    if (send(ns_socket, &request_type, sizeof(request_type), 0) == -1) {
+        perror("Error sending request type to naming server");
+        close(ns_socket);
+        exit(1);
+    }
+
+    printf("Request type sent to naming server\n");
+
+    // Introduce a delay before sending the storage server information
+    sleep(1);
+
+    // Send storage server information to the naming server
+    if (send(ns_socket, &ss_info, sizeof(struct StorageServerInfo), 0) == -1) {
+        perror("Sending storage server info to naming server failed");
+        close(ns_socket);
+        exit(1);
+    }
+
+    printf("Storage server information sent to naming server\n");
+
+    pthread_exit(NULL);
+}
+
+void *receiveCommandsFromNamingServer(void *arg) {
+    int ns_socket = *((int *)arg);
+
+    char command[MAX_COMMAND_SIZE];
+    if (recv(ns_socket, command, sizeof(command), 0) == -1) {
+        perror("Receiving command failed");
+        close(ns_socket);
+        exit(1);
+    }
+
+    printf("Received command: %s\n", command);
+
+    if (strcmp(command, "CREATE_FILE") == 0) {
+        createFile();
+    } else if (strcmp(command, "CREATE_DIRECTORY") == 0) {
+        createDirectory();
+    } else {
+        printf("Invalid command\n");
+    }
+
+    pthread_exit(NULL);
+}
+
+void *handleClientRequest(void *arg) {
+    int client_socket = *((int *)arg);
+
+    char command[MAX_COMMAND_SIZE];
+    if (recv(client_socket, command, sizeof(command), 0) == -1) {
+        perror("Receiving command from client failed");
+        close(client_socket);
+        pthread_exit(NULL);
+    }
+
+    printf("Received command from client: %s\n", command);
+
+    if (strcmp(command, "READ") == 0) {
+        FILE *file = fopen("1.c", "r");
+
+        // Check if the file is opened successfully
+        if (file == NULL) {
+            printf("Unable to open the file.\n");
+            // Send an error message to the client or handle it accordingly
+        } else {
+            // Read and send the contents of the file character by character
+            char c;
+            while ((c = fgetc(file)) != EOF) {
+                printf("%c",c);
+            }
+
+            // Close the file
+            fclose(file);
+        }
+    }
+
+    close(client_socket);
+    pthread_exit(NULL);
+}
+
 int main() {
     int ns_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (ns_socket == -1) {
@@ -105,36 +207,20 @@ int main() {
         exit(1);
     }
 
-    // Collect accessible paths
-    char accessible_paths[4096];
-    int current_pos = 0;
-    collectAccessiblePaths(".", accessible_paths, &current_pos, sizeof(accessible_paths));
-    accessible_paths[current_pos] = '\0';
+    pthread_t send_thread, receive_thread, client_thread;
 
-    // Prepare storage server information
-    struct StorageServerInfo ss_info;
-    strcpy(ss_info.ip_address, "127.0.0.1"); // Update with the actual IP
-    ss_info.nm_port = NAMING_SERVER_PORT;    // Update with the actual port
-    ss_info.client_port = STORAGE_SERVER_PORT;
-    strcpy(ss_info.accessible_paths, accessible_paths);
+    // Create threads for sending and receiving information from the naming server
+    if (pthread_create(&send_thread, NULL, sendInfoToNamingServer, &ns_socket) != 0) {
+        perror("Failed to create send thread");
+        close(ns_socket);
+        exit(1);
+    }
 
-    // Send storage server information to the naming server
-    sendStorageServerInfoToNamingServer(ns_socket, &ss_info);
-    char command[10000];
-    if(recv(ns_socket,command,sizeof(command),0) == -1)
-    {
-        perror("Receiving command failed\n");
+    if (pthread_create(&receive_thread, NULL, receiveCommandsFromNamingServer, &ns_socket) != 0) {
+        perror("Failed to create receive thread");
+        close(ns_socket);
+        exit(1);
     }
-     printf("Received command: %s",command);   
-      if (strcmp(command, "CREATE_FILE") == 0) {
-        createFile();
-    } else if (strcmp(command, "CREATE_DIRECTORY") == 0) {
-        createDirectory();
-    } else {
-        printf("Invalid command\n");
-    }
-    // Close the naming server socket
-    close(ns_socket);
 
     int ss_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (ss_socket == -1) {
@@ -159,53 +245,25 @@ int main() {
         exit(1);
     }
 
-    time_t last_accessible_paths_time = time(NULL);
+    while (1) {
+        int client_socket = accept(ss_socket, NULL, NULL);
+        if (client_socket == -1) {
+            perror("Accepting client connection failed");
+            continue; // Continue to the next iteration to keep listening
+        }
 
-   while (1) {
-    int client_socket = accept(ss_socket, NULL, NULL);
-    if (client_socket == -1) {
-        perror("Accepting client connection failed");
-        continue;  // Continue to the next iteration to keep listening
+        // Create a thread to handle client requests
+        if (pthread_create(&client_thread, NULL, handleClientRequest, &client_socket) != 0) {
+            perror("Failed to create client thread");
+            close(client_socket);
+        }
     }
 
-    char command[100000];
+    // Close the naming server socket
+    close(ns_socket);
 
-    if (recv(client_socket, command, sizeof(command), 0) == -1) {
-        perror("Receiving command failed\n");
-        close(client_socket);
-        continue;
-    }
+    // Close the storage server socket
+    close(ss_socket);
 
-    printf("Received command: %s", command);
-    if(strcmp(command,"READ") == 0)
-    {
-       FILE *file;
-
-    // Open the file in read mode
-    file = fopen("1.c", "r");
-
-    // Check if the file is opened successfully
-    if (file == NULL) {
-        printf("Unable to open the file.\n");
-        return 1; // Return an error code
-    }
-
-    // Read and print the contents of the file character by character
-    char c;
-    while ((c = fgetc(file)) != EOF) {
-        printf("%c", c);
-    }
-
-    // Close the file
-    fclose(file);
-    }
-    close(client_socket);
-   
-
-}
-
-
-close(ss_socket);
-
-return 0;
+    return 0;
 }
