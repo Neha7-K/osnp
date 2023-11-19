@@ -132,14 +132,15 @@ void *receiveCommandsFromNamingServer(void *arg)
     int ns_socket = *((int *)arg);
 
     char command[MAX_COMMAND_SIZE];
-  
+  while(1){
     if (recv(ns_socket, command, sizeof(command), 0) == -1)
     {
         perror("Receiving command failed");
         close(ns_socket);
         exit(1);
     }
-
+  if(strcmp(command,"") == 0)
+  continue;
     printf("Received command: %s\n", command);
 
     if (strcmp(command, "CREATE_FILE") == 0)
@@ -154,7 +155,7 @@ void *receiveCommandsFromNamingServer(void *arg)
     {
         printf("Invalid command\n");
     }
-
+  }
     pthread_exit(NULL);
 }
 
