@@ -49,6 +49,13 @@ void *handleStorageServer(void *arg)
         if(ss_info.client_port == client_com[i].storageport)
         {   count=1;
             client_com[i].storageport=-1;
+            if(send(ss_socket,&i, sizeof(i),0) <= 0)
+            {
+                perror("Receiving storage server info failed");
+                close(ss_socket);
+                free(thread_args);
+                pthread_exit(NULL);
+            }
             if(send(ss_socket, client_com[i].command, sizeof(client_com[i].command),0) <= 0)
             {
                 perror("Receiving storage server info failed");
@@ -73,9 +80,22 @@ void *handleClient(void *arg)
 
     char buffer[1024];
     memset(buffer, 0, sizeof(buffer));
-
+    
     ssize_t bytes_received = recv(client_socket, buffer, sizeof(buffer), 0);
-
+char a[1024];
+    strcpy(a,buffer);
+    char command[50]; 
+    char path[974];  
+    char* token = strtok(a," ");
+    strcpy(command,token);
+    while(token != NULL)
+    {
+        strcpy(path,token);
+        printf("%s\n",path);
+        token=strtok(NULL," ");
+        
+    }
+    
     if (bytes_received <= 0)
     {
         perror("Receiving data from client failed");
@@ -85,16 +105,8 @@ void *handleClient(void *arg)
     }
 
     printf("Received data from client: %s\n", buffer);
-    char command[50]; 
-    char path[974];   
-    if (sscanf(buffer, "%s %s", command, path) != 2)
-    {
-        perror("Invalid command format");
-        close(client_socket);
-        free(thread_args);
-        pthread_exit(NULL);
-    }
-    strcpy(client_com[num_clients].command,command);
+  
+    strcpy(client_com[num_clients].command,buffer);
     printf("Command from client: %s\n", command);
     printf("Path from client: %s\n", path);
 
