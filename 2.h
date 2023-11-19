@@ -16,14 +16,17 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <time.h>
+#include<ctype.h>
 struct StorageServerInfo
 {
     char ip_address[16];
     int nm_port;
     int client_port;
      char accessible_paths[4096];
+     char storageserverpath[100];
  };
-
+int num_clients;
+int clientarr[100];
 void collectAccessiblePaths(const char *dir_path, char *accessible_paths, int *pos, int size);
 void createFile();
 void createDirectory();
