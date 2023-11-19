@@ -64,7 +64,118 @@ void createDirectory()
     }
     printf("Empty directory created: new_directory\n");
 }
+void readfile(int i,char* path)
+{   
+    
+     FILE *file = fopen(path, "r");
 
+    // Check if the file was opened successfully
+    if (file == NULL) {
+        fprintf(stderr, "Unable to open file: %s\n", path);
+        return ; // Return NULL to indicate an error
+    }
+
+    // Seek to the end of the file to determine its size
+    fseek(file, 0, SEEK_END);
+    long fileSize = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    // Allocate memory for the entire file content
+    char *contentsArray = (char*)malloc(fileSize + 1); // +1 for null terminator
+
+    if (contentsArray == NULL) {
+        fprintf(stderr, "Memory allocation error\n");
+        fclose(file);
+        return ; // Return NULL to indicate an error
+    }
+
+    // Read the entire file into the contentsArray
+    size_t bytesRead = fread(contentsArray, 1, fileSize, file);
+    contentsArray[bytesRead] = '\0'; // Null-terminate the string
+
+    // Close the file
+    if(send(clientarr[i],contentsArray,sizeof(contentsArray),0) == -1)
+    {
+        printf("error");
+    }
+    char sh[]="Exit";
+    if(send(clientarr[i],sh,sizeof(sh),0) == -1)
+    {
+        printf("error");
+    }
+    close(clientarr[i]);
+    // Close the file
+    fclose(file);
+
+}
+void removestrings(char* str,char* sub)
+{
+     size_t len = strlen(sub);
+
+    while ((str = strstr(str, sub)) != NULL) {
+        memmove(str, str + len, strlen(str + len) + 1);
+    }
+
+}
+
+void trim(char *str) {
+    // Trim leading spaces
+    while (isspace((unsigned char)*str)) {
+        str++;
+    }
+
+    // Trim trailing spaces
+    size_t len = strlen(str);
+    while (len > 0 && isspace((unsigned char)str[len - 1])) {
+        len--;
+    }
+
+    // Null-terminate the trimmed string
+    str[len] = '\0';
+}
+void writefile(char* content,char* path)
+{
+    FILE *file = fopen(path, "w");
+
+    // Check if the file was opened successfully
+    if (file == NULL) {
+        fprintf(stderr, "Unable to open file: %s\n", path);
+        return ; // Exit with an error code
+    }
+
+    
+    fprintf(file, "%s\n", content);
+
+   
+    fclose(file);
+}
+void getper(char* path)
+{
+    struct stat fileInfo;
+
+    // Use stat to get information about the file
+    if (stat(path, &fileInfo) != 0) {
+        perror("Error in stat");
+        return;
+    }
+
+    // Display file size
+    printf("File Size: %lld bytes\n", (long long)fileInfo.st_size);
+
+    // Display file permissions
+    printf("File Permissions: ");
+    printf((S_ISDIR(fileInfo.st_mode)) ? "d" : "-");
+    printf((fileInfo.st_mode & S_IRUSR) ? "r" : "-");
+    printf((fileInfo.st_mode & S_IWUSR) ? "w" : "-");
+    printf((fileInfo.st_mode & S_IXUSR) ? "x" : "-");
+    printf((fileInfo.st_mode & S_IRGRP) ? "r" : "-");
+    printf((fileInfo.st_mode & S_IWGRP) ? "w" : "-");
+    printf((fileInfo.st_mode & S_IXGRP) ? "x" : "-");
+    printf((fileInfo.st_mode & S_IROTH) ? "r" : "-");
+    printf((fileInfo.st_mode & S_IWOTH) ? "w" : "-");
+    printf((fileInfo.st_mode & S_IXOTH) ? "x" : "-");
+    printf("\n");
+}
 void sendStorageServerInfoToNamingServer(int ns_socket, const struct StorageServerInfo *ss_info)
 {
     char request_type = 'I';
@@ -133,23 +244,53 @@ void *receiveCommandsFromNamingServer(void *arg)
 
     char command[MAX_COMMAND_SIZE];
   while(1){
+    int i;
+    if(recv(ns_socket,&i,sizeof(i),0) == -1)
+    {
+        continue;
+    }
     if (recv(ns_socket, command, sizeof(command), 0) == -1)
     {
-        perror("Receiving command failed");
-        close(ns_socket);
-        exit(1);
+        continue;
     }
   if(strcmp(command,"") == 0)
   continue;
     printf("Received command: %s\n", command);
-
-    if (strcmp(command, "CREATE_FILE") == 0)
+    char a[1024];
+    strcpy(a,command);
+    char* token=strtok(a," ");
+    char command1[strlen(token)];
+    
+    strcpy(command1,token);
+    char path[100];
+    while(token != NULL){
+        strcpy(path,token);
+       token=strtok(NULL," ");
+    }
+   
+    if (strcmp(command1, "CREATEFILE") == 0)
     {
         createFile();
     }
-    else if (strcmp(command, "CREATE_DIRECTORY") == 0)
+    else if (strcmp(command1, "CREATEDIRECTORY") == 0)
     {
         createDirectory();
+    }
+    else if(strcmp(command1,"READ") == 0)
+    {
+        readfile(i,path);
+    }
+    else if(strcmp(command1,"WRITE") == 0)
+    {
+        removestrings(command,command1);
+        removestrings(command,path);
+        trim(command);
+        printf("%s\n",command);
+        writefile(command,path);
+    }
+    else if(strcmp(command1,"GET") == 0)
+    {
+        getper(path);
     }
     else
     {
@@ -163,39 +304,8 @@ void *handleClientRequest(void *arg)
 {
     int client_socket = *((int *)arg);
 
-    char command[MAX_COMMAND_SIZE];
-    if (recv(client_socket, command, sizeof(command), 0) == -1)
-    {
-        perror("Receiving command from client failed");
-        close(client_socket);
-        pthread_exit(NULL);
-    }
-
-    printf("Received command from client: %s\n", command);
-
-    if (strcmp(command, "READ") == 0)
-    {
-        FILE *file = fopen("1.c", "r");
-
-        // Check if the file is opened successfully
-        if (file == NULL)
-        {
-            printf("Unable to open the file.\n");
-            // Send an error message to the client or handle it accordingly
-        }
-        else
-        {
-            // Read and send the contents of the file character by character
-            char c;
-            while ((c = fgetc(file)) != EOF)
-            {
-                printf("%c", c);
-            }
-
-            // Close the file
-            fclose(file);
-        }
-    }
+   
+ 
 
     close(client_socket);
     pthread_exit(NULL);
@@ -268,6 +378,7 @@ int main()
     while (1)
     {
         int client_socket = accept(ss_socket, NULL, NULL);
+        clientarr[num_clients++]=client_socket;
         if (client_socket == -1)
         {
             perror("Accepting client connection failed");
@@ -275,11 +386,11 @@ int main()
         }
 
         // Create a thread to handle client requests
-        if (pthread_create(&client_thread, NULL, handleClientRequest, &client_socket) != 0)
+        /*if (pthread_create(&client_thread, NULL, handleClientRequest, &client_socket) != 0)
         {
             perror("Failed to create client thread");
             close(client_socket);
-        }
+        }*/
         /*if (pthread_join(receive_thread, NULL) != 0)
 {
     perror("Failed to join receive thread");
