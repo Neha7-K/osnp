@@ -1,4 +1,4 @@
-#include "defs.h"
+#include "3.h"
 
 void communicateWithStorageServer(int storage_server_port)
 {
@@ -12,7 +12,7 @@ void communicateWithStorageServer(int storage_server_port)
     struct sockaddr_in ss_address;
     ss_address.sin_family = AF_INET;
     ss_address.sin_port = htons(storage_server_port);
-    ss_address.sin_addr.s_addr = inet_addr(NAMING_SERVER_IP); // Update this with the actual storage server IP
+    ss_address.sin_addr.s_addr = inet_addr(NAMING_SERVER_IP); 
 
     if (connect(ss_socket, (struct sockaddr *)&ss_address, sizeof(ss_address)) == -1)
     {
@@ -64,8 +64,12 @@ int main()
         close(client_socket);
         exit(1);
     }
-    sleep(10);
-    char path[] = "./1.c";
+    
+
+    char path[10000];
+    printf("enter the command\n");
+    scanf("%[^\n]s",path);
+
     if (send(client_socket, path, sizeof(path), 0) == -1)
     {
         perror("Sending path to naming server failed");
