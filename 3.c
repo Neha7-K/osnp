@@ -20,16 +20,22 @@ void communicateWithStorageServer(int storage_server_port)
         close(ss_socket);
         exit(1);
     }
-
-    // Send a message to the storage server
-    char message[] = "READ";
-    if (send(ss_socket, message, sizeof(message), 0) == -1)
+   while(1){
+    char message[1000000000];
+    if (recv(ss_socket, message, sizeof(message), 0) == -1)
     {
         perror("Sending message to storage server failed");
         close(ss_socket);
         exit(1);
     }
-
+    if(strcmp(message,"") == 0)
+    continue;
+    if(strcmp(message,"Exit") == 0)
+    {
+        break;
+    }
+    printf("%s\n",message);
+   }
     // Add any additional communication with the storage server as needed
 
     close(ss_socket);
@@ -78,6 +84,7 @@ int main()
     }
 
     int storage_server_port;
+    
     if (recv(client_socket, &storage_server_port, sizeof(storage_server_port), 0) == -1)
     {
         perror("Receiving storage server port from naming server failed");
