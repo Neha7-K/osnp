@@ -49,7 +49,6 @@ void *handleStorageServer(void *arg)
         if(ss_info.client_port == client_com[i].storageport)
         {   count=1;
             client_com[i].storageport=-1;
-            printf("111\n");
             if(send(ss_socket, client_com[i].command, sizeof(client_com[i].command),0) <= 0)
             {
                 perror("Receiving storage server info failed");
