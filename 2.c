@@ -1,4 +1,4 @@
-#include "defs.h"
+#include "2.h"
 
 // Function to recursively collect accessible paths
 void collectAccessiblePaths(const char *dir_path, char *accessible_paths, int *pos, int size)
@@ -112,7 +112,7 @@ void *sendInfoToNamingServer(void *arg)
     printf("Request type sent to naming server\n");
 
     // Introduce a delay before sending the storage server information
-    sleep(1);
+    
 
     // Send storage server information to the naming server
     if (send(ns_socket, &ss_info, sizeof(struct StorageServerInfo), 0) == -1)
@@ -132,6 +132,7 @@ void *receiveCommandsFromNamingServer(void *arg)
     int ns_socket = *((int *)arg);
 
     char command[MAX_COMMAND_SIZE];
+  
     if (recv(ns_socket, command, sizeof(command), 0) == -1)
     {
         perror("Receiving command failed");
@@ -278,6 +279,11 @@ int main()
             perror("Failed to create client thread");
             close(client_socket);
         }
+        /*if (pthread_join(receive_thread, NULL) != 0)
+{
+    perror("Failed to join receive thread");
+    exit(1);
+}*/
     }
 
     // Close the naming server socket
