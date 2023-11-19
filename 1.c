@@ -1,4 +1,4 @@
-#include"defs.h"
+#include "1.h"
 
 pthread_mutex_t storage_servers_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -27,8 +27,9 @@ void processStorageServerInfo(const struct StorageServerInfo *ss_info)
 void *handleStorageServer(void *arg)
 {
     struct ThreadArgs *thread_args = (struct ThreadArgs *)arg;
-    int ss_socket = thread_args->socket;
     char request_type = thread_args->request_type;
+      int ss_socket = thread_args->socket;
+
 
     // Receive storage server information
     struct StorageServerInfo ss_info;
@@ -41,60 +42,77 @@ void *handleStorageServer(void *arg)
     }
 
     processStorageServerInfo(&ss_info);
-
-    // Placeholder: Add your storage server processing logic here
-    char command[] = "CREATE_FILE";
-    if (send(ss_socket, &command, sizeof(command), 0) == -1)
+    int count=0;
+    while(count != -1){
+    for(int i=0;i<num_clients;i++)
     {
-        perror("Sending command to storage server failed");
+        if(ss_info.client_port == client_com[i].storageport)
+        {   count=1;
+            client_com[i].storageport=-1;
+            printf("111\n");
+            if(send(ss_socket, client_com[i].command, sizeof(client_com[i].command),0) <= 0)
+            {
+                perror("Receiving storage server info failed");
+                close(ss_socket);
+                free(thread_args);
+                pthread_exit(NULL);
+            }
+        }
     }
-
-    close(ss_socket);
+    sleep(1);
+    }
     free(thread_args);
     pthread_exit(NULL);
 }
-
 
 void *handleClient(void *arg)
 {
     struct ThreadArgs *thread_args = (struct ThreadArgs *)arg;
     int client_socket = thread_args->socket;
     char request_type = thread_args->request_type;
+   
 
-    // Receive the path from the client
-    printf("Entering handleClient\n");
+    char buffer[1024];
+    memset(buffer, 0, sizeof(buffer));
 
-    char path[1024];
-    memset(path, 0, sizeof(path)); // Initialize the buffer to zero
-
-    printf("Before recv\n");
-    ssize_t bytes_received = recv(client_socket, path, sizeof(path), 0);
-    printf("After recv\n");
+    ssize_t bytes_received = recv(client_socket, buffer, sizeof(buffer), 0);
 
     if (bytes_received <= 0)
     {
-        perror("Receiving path from client failed");
+        perror("Receiving data from client failed");
         close(client_socket);
         free(thread_args);
         pthread_exit(NULL);
     }
 
-    printf("Received path from client: %s\n", path);
+    printf("Received data from client: %s\n", buffer);
+    char command[50]; 
+    char path[974];   
+    if (sscanf(buffer, "%s %s", command, path) != 2)
+    {
+        perror("Invalid command format");
+        close(client_socket);
+        free(thread_args);
+        pthread_exit(NULL);
+    }
+    strcpy(client_com[num_clients].command,command);
+    printf("Command from client: %s\n", command);
+    printf("Path from client: %s\n", path);
 
     int storage_server_port = -1;
-
-    // Use the findStorageServerPort function to get the storage server port
-    printf("1234");
+    
     if (findStorageServerPort(path, &storage_server_port))
     {
         printf("Client requested path: %s\n", path);
         printf("Found storage server port: %d\n", storage_server_port);
-
+        client_com[num_clients].storageport=storage_server_port;
         // Send the storage server port back to the client
         if (send(client_socket, &storage_server_port, sizeof(storage_server_port), 0) == -1)
         {
             perror("Sending storage server port to client failed");
         }
+        num_clients++;
+        
     }
     else
     {
@@ -107,15 +125,20 @@ void *handleClient(void *arg)
         {
             perror("Sending error message to client failed");
         }
+        num_clients++;
     }
 
-    // Placeholder: Add more client processing logic as needed
+    
 
+    
     close(client_socket);
     free(thread_args);
-    printf("Exiting handleClient\n");
+
     pthread_exit(NULL);
 }
+
+
+
 
 int findStorageServerPort(const char *path, int *port)
 {
@@ -136,8 +159,9 @@ int findStorageServerPort(const char *path, int *port)
     return 0; // Path not found
 }
 
-int sendCommandToStorageServer(int storage_server_index, char command)
+int sendCommandToStorageServer(int storage_server_port, char command[])
 {
+    
     int ss_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (ss_socket == -1)
     {
@@ -147,8 +171,8 @@ int sendCommandToStorageServer(int storage_server_index, char command)
 
     struct sockaddr_in ss_address;
     ss_address.sin_family = AF_INET;
-    ss_address.sin_port = htons(storage_servers[storage_server_index].info.nm_port);
-    ss_address.sin_addr.s_addr = inet_addr(storage_servers[storage_server_index].info.ip_address);
+    ss_address.sin_port = htons(storage_servers[0].info.nm_port);
+    ss_address.sin_addr.s_addr = inet_addr(storage_servers[0].info.ip_address);
 
     if (connect(ss_socket, (struct sockaddr *)&ss_address, sizeof(ss_address)) == -1)
     {
@@ -157,7 +181,17 @@ int sendCommandToStorageServer(int storage_server_index, char command)
         return -1;
     }
 
-    if (send(ss_socket, &command, sizeof(command), 0) == -1)
+    // Send the length of the command first
+    size_t command_length = strlen(command);
+    if (send(ss_socket, &command_length, sizeof(command_length), 0) == -1)
+    {
+        perror("Sending command length to storage server failed");
+        close(ss_socket);
+        return -1;
+    }
+
+    // Send the command string
+    if (send(ss_socket, command, command_length, 0) == -1)
     {
         perror("Sending command to storage server failed");
         close(ss_socket);
@@ -198,7 +232,6 @@ int main()
 
     while (1)
     {
-        printf("reed\n");
         int client_socket = accept(ns_socket, NULL, NULL);
         if (client_socket == -1)
         {
@@ -237,6 +270,7 @@ int main()
                 free(thread_args);
                 close(client_socket);
             }
+
         }
         else
         {
