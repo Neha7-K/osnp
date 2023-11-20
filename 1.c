@@ -70,7 +70,36 @@ void *handleStorageServer(void *arg)
     free(thread_args);
     pthread_exit(NULL);
 }
+void copyFile(const char *source, const char *destination)
+{
+    FILE *source_file = fopen(source, "rb");
+    if (!source_file)
+    {
+        perror("Error opening source file");
+        return;
+    }
+    FILE *dest_file = fopen(destination, "wb");
+    if (!dest_file)
+    {
+        perror("Error opening destination file");
+        fclose(source_file);
+        return;
+    }
 
+    char buffer[1024];
+    size_t bytesRead;
+
+    while ((bytesRead = fread(buffer, 1, sizeof(buffer), source_file)) > 0)
+    {
+        if (fwrite(buffer, 1, bytesRead, dest_file) != bytesRead)
+        {
+            perror("Error writing to destination file");
+            break;
+        }
+    }
+    fclose(source_file);
+    fclose(dest_file);
+}
 void *handleClient(void *arg)
 {
     struct ThreadArgs *thread_args = (struct ThreadArgs *)arg;
@@ -87,7 +116,33 @@ char a[1024];
     char command[50]; 
     char path[974];  
     char* token = strtok(a," ");
+    int storage_server_port = -1;
     strcpy(command,token);
+    if(strcmp(command,"COPY") == 0)
+    {
+        char source[10000];
+        char destination[100000];
+          if (sscanf(buffer, "%s %s %s", command, source, destination) != 3)
+        {
+            perror("Invalid COPY command format");
+            close(client_socket);
+            free(thread_args);
+            pthread_exit(NULL);
+        }
+          int source_storage_port = -1;
+         if (findStorageServerPort(source, &source_storage_port))
+        {
+            int destination_storage_port = -1;
+            if (findStorageServerPort(destination, &destination_storage_port))
+            {
+                copyFile(source, destination);
+                printf("File copied from %s to %s\n", source, destination);
+                storage_server_port = 0;
+            }
+    }
+   
+    }
+    else{
     while(token != NULL)
     {
         strcpy(path,token);
@@ -110,7 +165,7 @@ char a[1024];
     printf("Command from client: %s\n", command);
     printf("Path from client: %s\n", path);
 
-    int storage_server_port = -1;
+    
     
     if (findStorageServerPort(path, &storage_server_port))
     {
@@ -140,7 +195,7 @@ char a[1024];
     }
 
     
-
+    }
     
     close(client_socket);
     free(thread_args);
@@ -285,13 +340,10 @@ int main()
         }
         else
         {
-            // Handle unknown request type
             free(thread_args);
             close(client_socket);
         }
     }
-
-    // Cleanup and close the naming server socket
     close(ns_socket);
     return 0;
 }
