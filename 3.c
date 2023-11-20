@@ -1,5 +1,20 @@
-#include "3.h"
 
+#include "3.h"
+void trim(char *str) {
+    // Trim leading spaces
+    while (isspace((unsigned char)*str)) {
+        str++;
+    }
+
+    // Trim trailing spaces
+    size_t len = strlen(str);
+    while (len > 0 && isspace((unsigned char)str[len - 1])) {
+        len--;
+    }
+
+    // Null-terminate the trimmed string
+    str[len] = '\0';
+}
 void communicateWithStorageServer(int storage_server_port)
 {
     int ss_socket = socket(AF_INET, SOCK_STREAM, 0);
@@ -20,24 +35,34 @@ void communicateWithStorageServer(int storage_server_port)
         close(ss_socket);
         exit(1);
     }
-   while(1){
-    char message[1000000000];
-    if (recv(ss_socket, message, sizeof(message), 0) == -1)
-    {
-        perror("Sending message to storage server failed");
-        close(ss_socket);
-        exit(1);
-    }
-    if(strcmp(message,"") == 0)
-    continue;
-    if(strcmp(message,"Exit") == 0)
-    {
-        break;
-    }
-    printf("%s\n",message);
-   }
-    // Add any additional communication with the storage server as needed
+   
+     
+  
+   char buffer[4096];
+    ssize_t bytes_received;
 
+    // Receive data until a stop message is received
+    while ((bytes_received = recv(ss_socket, buffer, sizeof(buffer) - 1, 0)) > 0)
+    {
+        // Null-terminate the received data to treat it as a string
+        buffer[bytes_received] = '\0';
+
+        // Print the received data to the console
+        
+
+        // Check if the stop message is received
+        if (strstr(buffer, "STOP") != NULL)
+        {
+            
+            break;
+        }
+        printf("Received data: %s", buffer);
+    }
+
+    if (bytes_received == -1)
+    {
+        perror("Receiving data failed");
+    }
     close(ss_socket);
 }
 
@@ -73,7 +98,7 @@ int main()
     
 
     char path[10000];
-    printf("enter the command\n");
+    printf("enter the command: ");
     scanf("%[^\n]s",path);
 
     if (send(client_socket, path, sizeof(path), 0) == -1)
@@ -85,7 +110,7 @@ int main()
 
     int storage_server_port;
     
-    if (recv(client_socket, &storage_server_port, sizeof(storage_server_port), 0) == -1)
+    if ((recv(client_socket, &storage_server_port, sizeof(storage_server_port), 0) == -1)  && path != "COPY")
     {
         perror("Receiving storage server port from naming server failed");
         close(client_socket);
