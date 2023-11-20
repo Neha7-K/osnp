@@ -64,49 +64,40 @@ void createDirectory()
     }
     printf("Empty directory created: new_directory\n");
 }
-void readfile(int i,char* path)
-{   
-    
-     FILE *file = fopen(path, "r");
-
-    // Check if the file was opened successfully
-    if (file == NULL) {
-        fprintf(stderr, "Unable to open file: %s\n", path);
-        return ; // Return NULL to indicate an error
-    }
-
-    // Seek to the end of the file to determine its size
-    fseek(file, 0, SEEK_END);
-    long fileSize = ftell(file);
-    fseek(file, 0, SEEK_SET);
-
-    // Allocate memory for the entire file content
-    char *contentsArray = (char*)malloc(fileSize + 1); // +1 for null terminator
-
-    if (contentsArray == NULL) {
-        fprintf(stderr, "Memory allocation error\n");
-        fclose(file);
-        return ; // Return NULL to indicate an error
-    }
-
-    // Read the entire file into the contentsArray
-    size_t bytesRead = fread(contentsArray, 1, fileSize, file);
-    contentsArray[bytesRead] = '\0'; // Null-terminate the string
-
-    // Close the file
-    if(send(clientarr[i],contentsArray,sizeof(contentsArray),0) == -1)
+void readfile(int i, const char *path)
+{
+    FILE *file = fopen(path, "rb");
+    if (file == NULL)
     {
-        printf("error");
+        perror("Unable to open file");
+        return;
     }
-    char sh[]="Exit";
-    if(send(clientarr[i],sh,sizeof(sh),0) == -1)
+
+    char buffer[4096];
+    size_t bytes_read;
+
+    // Read and send file in chunks
+    while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0)
     {
-        printf("error");
+        if (send(clientarr[i], buffer, bytes_read, 0) == -1)
+        {
+            perror("Sending file content failed");
+            fclose(file);
+            close(clientarr[i]);
+            return;
+        }
     }
-    close(clientarr[i]);
+
+    // Send a completion message
+    const char *completionMessage = "STOP";
+    if (send(clientarr[i], completionMessage, strlen(completionMessage), 0) == -1)
+    {
+        perror("Sending completion message failed");
+    }
+
     // Close the file
     fclose(file);
-
+    close(clientarr[i]);
 }
 void removestrings(char* str,char* sub)
 {
@@ -149,7 +140,7 @@ void writefile(char* content,char* path)
    
     fclose(file);
 }
-void getper(char* path)
+void getper(int i,char* path)
 {
     struct stat fileInfo;
 
@@ -160,21 +151,32 @@ void getper(char* path)
     }
 
     // Display file size
-    printf("File Size: %lld bytes\n", (long long)fileInfo.st_size);
+    char fileSizeString[100];
+    sprintf(fileSizeString, "File Size: %lld bytes\n", (long long)fileInfo.st_size);
 
-    // Display file permissions
-    printf("File Permissions: ");
-    printf((S_ISDIR(fileInfo.st_mode)) ? "d" : "-");
-    printf((fileInfo.st_mode & S_IRUSR) ? "r" : "-");
-    printf((fileInfo.st_mode & S_IWUSR) ? "w" : "-");
-    printf((fileInfo.st_mode & S_IXUSR) ? "x" : "-");
-    printf((fileInfo.st_mode & S_IRGRP) ? "r" : "-");
-    printf((fileInfo.st_mode & S_IWGRP) ? "w" : "-");
-    printf((fileInfo.st_mode & S_IXGRP) ? "x" : "-");
-    printf((fileInfo.st_mode & S_IROTH) ? "r" : "-");
-    printf((fileInfo.st_mode & S_IWOTH) ? "w" : "-");
-    printf((fileInfo.st_mode & S_IXOTH) ? "x" : "-");
-    printf("\n");
+    // Store file permissions in a string
+    char filePermissionsString[20];
+    sprintf(filePermissionsString, "File Permissions: %s%s%s%s%s%s%s%s%s%s\n",
+            (S_ISDIR(fileInfo.st_mode)) ? "d" : "-",
+            (fileInfo.st_mode & S_IRUSR) ? "r" : "-",
+            (fileInfo.st_mode & S_IWUSR) ? "w" : "-",
+            (fileInfo.st_mode & S_IXUSR) ? "x" : "-",
+            (fileInfo.st_mode & S_IRGRP) ? "r" : "-",
+            (fileInfo.st_mode & S_IWGRP) ? "w" : "-",
+            (fileInfo.st_mode & S_IXGRP) ? "x" : "-",
+            (fileInfo.st_mode & S_IROTH) ? "r" : "-",
+            (fileInfo.st_mode & S_IWOTH) ? "w" : "-",
+            (fileInfo.st_mode & S_IXOTH) ? "x" : "-");
+
+    // Now you can use the stored strings as needed
+    if (send(clientarr[i], fileSizeString, strlen(fileSizeString), 0) == -1)
+    {
+        perror("Sending completion message failed");
+    }
+    if (send(clientarr[i], filePermissionsString, strlen(filePermissionsString), 0) == -1)
+    {
+        perror("Sending completion message failed");
+    }
 }
 void sendStorageServerInfoToNamingServer(int ns_socket, const struct StorageServerInfo *ss_info)
 {
@@ -198,10 +200,18 @@ void *sendInfoToNamingServer(void *arg)
 {
     int ns_socket = *((int *)arg);
 
-    // Collect accessible paths
+    // Get the absolute path of the current working directory
+    char current_directory[PATH_MAX];
+    if (getcwd(current_directory, sizeof(current_directory)) == NULL)
+    {
+        perror("Getting current working directory failed");
+        exit(1);
+    }
+
+    // Collect accessible paths starting from the absolute path
     char accessible_paths[4096];
     int current_pos = 0;
-    collectAccessiblePaths(".", accessible_paths, &current_pos, sizeof(accessible_paths));
+    collectAccessiblePaths(current_directory, accessible_paths, &current_pos, sizeof(accessible_paths));
     accessible_paths[current_pos] = '\0';
 
     // Prepare storage server information
@@ -223,7 +233,6 @@ void *sendInfoToNamingServer(void *arg)
     printf("Request type sent to naming server\n");
 
     // Introduce a delay before sending the storage server information
-    
 
     // Send storage server information to the naming server
     if (send(ns_socket, &ss_info, sizeof(struct StorageServerInfo), 0) == -1)
@@ -237,6 +246,7 @@ void *sendInfoToNamingServer(void *arg)
 
     pthread_exit(NULL);
 }
+
 
 void *receiveCommandsFromNamingServer(void *arg)
 {
@@ -290,7 +300,7 @@ void *receiveCommandsFromNamingServer(void *arg)
     }
     else if(strcmp(command1,"GET") == 0)
     {
-        getper(path);
+        getper(i,path);
     }
     else
     {
