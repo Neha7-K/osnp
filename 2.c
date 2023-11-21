@@ -150,22 +150,24 @@ void deleteDirectory(const char *dir_path)
         perror("Directory deletion failed");
     }
 }
-void readfile(int i, char *path)
-{
-    // printf("abcd");
+void readfile(struct readclient *CM)
+{   printf("%s",CM->clientpath);
+     int i=CM->clienti;
+    char path[100];
+    strcpy(path,CM->clientpath);
+    printf("%s",path);
     FILE *file = fopen(path, "rb");
-    if (file == NULL)
-    {
+    if (file == NULL) {
         perror("Unable to open file");
         return;
     }
-    char buffer[400];
-    size_t bytes_read;
 
-    while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0)
-    {
-        if (send(clientarr[i], buffer, bytes_read, 0) == -1)
-        {
+    char buffer[512];
+    // Read and send file in lines
+    
+    while (fgets(buffer, sizeof(buffer), file) != NULL) {
+        // Send the buffer over the network
+        if (send(clientarr[i], buffer, strlen(buffer), 0) == -1) {
             perror("Sending file content failed");
             fclose(file);
             close(clientarr[i]);
@@ -173,11 +175,13 @@ void readfile(int i, char *path)
         }
     }
 
+    // Send a completion message
     const char *completionMessage = "STOP";
-    if (send(clientarr[i], completionMessage, strlen(completionMessage), 0) == -1)
-    {
+    if (send(clientarr[i], completionMessage, strlen(completionMessage), 0) == -1) {
         perror("Sending completion message failed");
     }
+
+    // Close the file
     fclose(file);
     close(clientarr[i]);
 }
@@ -309,7 +313,7 @@ void *sendInfoToNamingServer(void *arg)
 void *receiveCommandsFromNamingServer(void *arg)
 {
     int ns_socket = *((int *)arg);
-
+struct readclient CR;
     char command[MAX_COMMAND_SIZE];
     while (1)
     {
@@ -343,7 +347,9 @@ void *receiveCommandsFromNamingServer(void *arg)
                 printf("Path: %s\n", path);
             }
         }
-        printf("Command: %s\n", command1);
+        CR.clienti=i;
+        strcpy(CR.clientpath,path);
+        
         if (strcmp(command1, "CREATEFILE") == 0)
         {
             createFile(path);
@@ -354,7 +360,12 @@ void *receiveCommandsFromNamingServer(void *arg)
         }
         else if (strncmp(command1, "READ", 4) == 0)
         {
-            readfile(i, path);
+           if (pthread_create(&clientread[i], NULL, readfile, &CR) != 0)
+    {
+        perror("Failed to create send thread");
+        close(ns_socket);
+        exit(1);
+    }
         }
         else if (strncmp(command1, "DELETEDIR", 4) == 0)
         {
