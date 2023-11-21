@@ -64,6 +64,61 @@ void createDirectory()
     }
     printf("Empty directory created: new_directory\n");
 }
+
+void deleteFile(const char *file_path)
+{
+    if (remove(file_path) == 0)
+    {
+        printf("File deleted: %s\n", file_path);
+    }
+    else
+    {
+        perror("File deletion failed");
+    }
+}
+
+void deleteDirectory(const char *dir_path)
+{
+    DIR *dir;
+    struct dirent *entry;
+
+    dir = opendir(dir_path);
+    if (!dir)
+    {
+        perror("Unable to open directory");
+        return;
+    }
+
+    while ((entry = readdir(dir)) != NULL)
+    {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+        {
+            continue; 
+        }
+
+        char entry_path[PATH_MAX];
+        snprintf(entry_path, sizeof(entry_path), "%s/%s", dir_path, entry->d_name);
+
+        if (entry->d_type == DT_DIR)
+        {
+            deleteDirectory(entry_path);
+        }
+        else if (entry->d_type == DT_REG)
+        {
+            deleteFile(entry_path);
+        }
+    }
+
+    closedir(dir);
+    if (rmdir(dir_path) == 0)
+    {
+        printf("Directory deleted: %s\n", dir_path);
+    }
+    else
+    {
+        perror("Directory deletion failed");
+    }
+}
 void readfile(int i, char *path)
 {
    // printf("abcd");
@@ -75,8 +130,7 @@ void readfile(int i, char *path)
     }
     char buffer[400];
     size_t bytes_read;
-    // printf("abcdds");
-    // Read and send file in chunks
+
     while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0)
     {
        // printf("%ld",bytes_read);
@@ -112,33 +166,25 @@ void removestrings(char *str, char *sub)
 
 void trim(char *str)
 {
-    // Trim leading spaces
     while (isspace((unsigned char)*str))
     {
         str++;
     }
-
-    // Trim trailing spaces
     size_t len = strlen(str);
     while (len > 0 && isspace((unsigned char)str[len - 1]))
     {
         len--;
     }
-
-    // Null-terminate the trimmed string
     str[len] = '\0';
 }
 void writefile(char *content, char *path)
 {
     FILE *file = fopen(path, "w");
-
-    // Check if the file was opened successfully
     if (file == NULL)
     {
         fprintf(stderr, "Unable to open file: %s\n", path);
-        return; // Exit with an error code
+        return; 
     }
-
     fprintf(file, "%s\n", content);
 
     fclose(file);
@@ -146,19 +192,13 @@ void writefile(char *content, char *path)
 void getper(int i, char *path)
 {
     struct stat fileInfo;
-
-    // Use stat to get information about the file
     if (stat(path, &fileInfo) != 0)
     {
         perror("Error in stat");
         return;
     }
-
-    // Display file size
     char fileSizeString[100];
     sprintf(fileSizeString, "File Size: %lld bytes\n", (long long)fileInfo.st_size);
-
-    // Store file permissions in a string
     char filePermissionsString[100];
     sprintf(filePermissionsString, "File Permissions: %s%s%s%s%s%s%s%s%s%s\n",
             (S_ISDIR(fileInfo.st_mode)) ? "d" : "-",
@@ -172,7 +212,7 @@ void getper(int i, char *path)
             (fileInfo.st_mode & S_IWOTH) ? "w" : "-",
             (fileInfo.st_mode & S_IXOTH) ? "x" : "-");
 
-    // Now you can use the stored strings as needed
+ 
     if (send(clientarr[i], fileSizeString, strlen(fileSizeString), 0) == -1)
     {
         perror("Sending completion message failed");
@@ -203,16 +243,6 @@ void sendStorageServerInfoToNamingServer(int ns_socket, const struct StorageServ
 void *sendInfoToNamingServer(void *arg)
 {
     int ns_socket = *((int *)arg);
-
-    // Get the absolute path of the current working directory
-    // char current_directory[PATH_MAX];
-    // if (getcwd(current_directory, sizeof(current_directory)) == NULL)
-    // {
-    //     perror("Getting current working directory failed");
-    //     exit(1);
-    // }
-
-    // Collect accessible paths starting from the absolute path
     char accessible_paths[4096];
     int current_pos = 0;
     collectAccessiblePaths(".", accessible_paths, &current_pos, sizeof(accessible_paths));
@@ -241,9 +271,7 @@ void *sendInfoToNamingServer(void *arg)
 
     printf("Request type sent to naming server\n");
 
-    // Introduce a delay before sending the storage server information
 
-    // Send storage server information to the naming server
     if (send(ns_socket, &ss_info, sizeof(ss_info), 0) == -1)
     {
         perror("Sending storage server info to naming server failed");
@@ -275,18 +303,7 @@ void *receiveCommandsFromNamingServer(void *arg)
         if (strcmp(command, "") == 0)
             continue;
         printf("Received command: %s\n", command);
-        // char a[1024];
-        // strcpy(a, command);
-        // char *token = strtok(a, " ");
-        // char command1[strlen(token)];
-        // strcpy(command1, token);
-        // printf("...%s..", command1);
-        // char path[100];
-        // while (token != NULL)
-        // {
-        //     strcpy(path, token);
-        //     token = strtok(NULL, " ");
-        // }
+
         char a[1024];
         strcpy(a, command);
 
@@ -316,8 +333,13 @@ void *receiveCommandsFromNamingServer(void *arg)
         }
         else if (strncmp(command1, "READ",4) == 0)
         {
-           // printf("1");
             readfile(i, path);
+        }
+        else if(strncmp(command1,"DELETEFILE",4)==0){
+            deleteFile(path);
+        }
+         else if(strncmp(command1,"DELETEDIR",4)==0){
+            deleteDirectory(path);
         }
         else if (strcmp(command1, "WRITE") == 0)
         {
