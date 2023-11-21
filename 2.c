@@ -45,16 +45,18 @@ void collectAccessiblePaths(const char *dir_path, char *accessible_paths, int *p
     closedir(dir);
 }
 
-void createFile()
+void createFile(const char *file_path)
 {
-    FILE *file = fopen("new_file.txt", "w");
+    FILE *file = fopen(file_path, "w");
     if (file == NULL)
     {
         perror("File creation failed");
+        return;
     }
     fclose(file);
-    printf("Empty file created: new_file.txt\n");
+    printf("Empty file created: %s\n", file_path);
 }
+
 
 void createDirectory()
 {
@@ -67,13 +69,42 @@ void createDirectory()
 
 void deleteFile(const char *file_path)
 {
-    if (remove(file_path) == 0)
+    struct stat path_stat;
+    if (stat(file_path, &path_stat) == 0)
     {
-        printf("File deleted: %s\n", file_path);
+        if (S_ISREG(path_stat.st_mode))
+        {
+            FILE *file = fopen(file_path, "r");
+            if (file)
+            {
+                fclose(file);
+
+                if (remove(file_path) == 0)
+                {
+                    printf("File deleted: %s\n", file_path);
+                }
+                else
+                {
+                    perror("File deletion failed");
+                }
+            }
+            else
+            {
+                printf("Failed to open file: %s\n", file_path);
+            }
+        }
+        else if (S_ISDIR(path_stat.st_mode))
+        {
+            printf("%s is a directory. Not deleting.\n", file_path);
+        }
+        else
+        {
+            printf("%s is not a regular file or directory.\n", file_path);
+        }
     }
     else
     {
-        perror("File deletion failed");
+        perror("Error getting file/directory information");
     }
 }
 
@@ -93,7 +124,7 @@ void deleteDirectory(const char *dir_path)
     {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
         {
-            continue; 
+            continue;
         }
 
         char entry_path[PATH_MAX];
@@ -121,18 +152,20 @@ void deleteDirectory(const char *dir_path)
 }
 void readfile(int i, char *path)
 {
-FILE *file = fopen(path, "rb");
-    if (file == NULL) {
+    // printf("abcd");
+    FILE *file = fopen(path, "rb");
+    if (file == NULL)
+    {
         perror("Unable to open file");
         return;
     }
+    char buffer[400];
+    size_t bytes_read;
 
-    char buffer[4096];
-
-    // Read and send file in lines
-    while (fgets(buffer, sizeof(buffer), file) != NULL) {
-        // Send the buffer over the network
-        if (send(clientarr[i], buffer, strlen(buffer), 0) == -1) {
+    while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0)
+    {
+        if (send(clientarr[i], buffer, bytes_read, 0) == -1)
+        {
             perror("Sending file content failed");
             fclose(file);
             close(clientarr[i]);
@@ -140,13 +173,11 @@ FILE *file = fopen(path, "rb");
         }
     }
 
-    // Send a completion message
     const char *completionMessage = "STOP";
-    if (send(clientarr[i], completionMessage, strlen(completionMessage), 0) == -1) {
+    if (send(clientarr[i], completionMessage, strlen(completionMessage), 0) == -1)
+    {
         perror("Sending completion message failed");
     }
-
-    // Close the file
     fclose(file);
     close(clientarr[i]);
 }
@@ -179,7 +210,7 @@ void writefile(char *content, char *path)
     if (file == NULL)
     {
         fprintf(stderr, "Unable to open file: %s\n", path);
-        return; 
+        return;
     }
     fprintf(file, "%s\n", content);
 
@@ -208,7 +239,6 @@ void getper(int i, char *path)
             (fileInfo.st_mode & S_IWOTH) ? "w" : "-",
             (fileInfo.st_mode & S_IXOTH) ? "x" : "-");
 
- 
     if (send(clientarr[i], fileSizeString, strlen(fileSizeString), 0) == -1)
     {
         perror("Sending completion message failed");
@@ -243,11 +273,9 @@ void *sendInfoToNamingServer(void *arg)
     int current_pos = 0;
     collectAccessiblePaths(".", accessible_paths, &current_pos, sizeof(accessible_paths));
     accessible_paths[current_pos] = '\0';
-
-    // Prepare storage server information
     struct StorageServerInfo ss_info;
-    strcpy(ss_info.ip_address, "127.0.0.1"); // Update with the actual IP
-    ss_info.nm_port = NAMING_SERVER_PORT;    // Update with the actual port
+    strcpy(ss_info.ip_address, "127.0.0.1");
+    ss_info.nm_port = NAMING_SERVER_PORT;
     ss_info.client_port = STORAGE_SERVER_PORT;
     strcpy(ss_info.accessible_paths, accessible_paths);
     if (getcwd(ss_info.absolute_address, sizeof(ss_info.absolute_address)) == NULL)
@@ -256,7 +284,6 @@ void *sendInfoToNamingServer(void *arg)
         exit(1);
     }
     printf("%s\n", ss_info.absolute_address);
-    // Send request type to the naming server
     char request_type = 'I';
     if (send(ns_socket, &request_type, sizeof(request_type), 0) == -1)
     {
@@ -266,7 +293,6 @@ void *sendInfoToNamingServer(void *arg)
     }
 
     printf("Request type sent to naming server\n");
-
 
     if (send(ns_socket, &ss_info, sizeof(ss_info), 0) == -1)
     {
@@ -304,46 +330,41 @@ void *receiveCommandsFromNamingServer(void *arg)
         strcpy(a, command);
 
         char *token = strtok(a, " ");
-        char command1[50]; // Adjust the size as needed
-        if(token != NULL)
-    strcpy(command1,token);
-    else
-    {
-        token=strtok(NULL," ");
-        strcpy(command1,token);
-    }
-          char path[100];
+        char command1[50]; 
+        char path[100];
         if (token != NULL)
         {
             strcpy(command1, token);
             printf("Command: %s\n", command1);
 
-           
             while ((token = strtok(NULL, " ")) != NULL)
             {
                 strcpy(path, token);
                 printf("Path: %s\n", path);
             }
         }
-       // printf("%s",command1);
+        printf("Command: %s\n", command1);
         if (strcmp(command1, "CREATEFILE") == 0)
         {
-            createFile();
+            createFile(path);
         }
         else if (strcmp(command1, "CREATEDIRECTORY") == 0)
         {
             createDirectory();
         }
-        else if (strncmp(command1, "READ",4) == 0)
+        else if (strncmp(command1, "READ", 4) == 0)
         {
             readfile(i, path);
         }
-        else if(strncmp(command1,"DELETEFILE",4)==0){
-            deleteFile(path);
-        }
-         else if(strncmp(command1,"DELETEDIR",4)==0){
+        else if (strncmp(command1, "DELETEDIR", 4) == 0)
+        {
             deleteDirectory(path);
         }
+        else if (strncmp(command1, "DELETEFILE", 4) == 0)
+        {
+            deleteFile(path);
+        }
+
         else if (strcmp(command1, "WRITE") == 0)
         {
             removestrings(command, command1);
@@ -395,8 +416,6 @@ int main()
     }
 
     pthread_t send_thread, receive_thread, client_thread;
-
-    // Create threads for sending and receiving information from the naming server
     if (pthread_create(&send_thread, NULL, sendInfoToNamingServer, &ns_socket) != 0)
     {
         perror("Failed to create send thread");
