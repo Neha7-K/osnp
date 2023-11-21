@@ -38,14 +38,14 @@ void communicateWithStorageServer(int storage_server_port)
    
      
   
-   char buffer[4096];
-    ssize_t bytes_received;
-
-    // Receive data until a stop message is received
-    while ((bytes_received = recv(ss_socket, buffer, sizeof(buffer) - 1, 0)) > 0)
+   while (1)
+    {   char buffer[4096];
+        if(recv(ss_socket, buffer, sizeof(buffer) - 1, 0) <= 0)
     {
+        continue;
+    }
         // Null-terminate the received data to treat it as a string
-        buffer[bytes_received] = '\0';
+        
 
         // Print the received data to the console
         
@@ -56,7 +56,8 @@ void communicateWithStorageServer(int storage_server_port)
             
             break;
         }
-        printf("Received data: %s", buffer);
+        printf("%s", buffer);
+        memset(buffer, 0, sizeof(buffer));
     }
 
     if (bytes_received == -1)
