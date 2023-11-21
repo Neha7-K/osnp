@@ -100,22 +100,7 @@ int main()
     }
 
     int storage_server_port;
-     int error_code;
-    if (recv(client_socket, &error_code, sizeof(error_code), 0) == -1)
-    {
-        perror("Receiving error code from naming server failed");
-        close(client_socket);
-        exit(1);
-    }
-
-    if (error_code == 1)
-    {
-        printf("Error: File not found on any storage server.\n");
-    }
-    else if(error_code == 2)
-    {
-        printf("Error: Invalid copy format.\n");
-    }
+    
     if ((recv(client_socket, &storage_server_port, sizeof(storage_server_port), 0) == -1)  && path != "COPY")
     {
         perror("Receiving storage server port from naming server failed");
