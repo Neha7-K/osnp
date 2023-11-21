@@ -14,5 +14,9 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <time.h>
+#include<ctype.h>
 void communicateWithStorageServer(int storage_server_port);
+#define NFS_FILE_NOT_FOUND 1
+
+#define COPY_FORMAT_INVALID 2
 #endif
