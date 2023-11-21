@@ -17,6 +17,7 @@
 #include <sys/stat.h>
 #include <time.h>
 #include<ctype.h>
+#include<signal.h>
 struct StorageServerInfo
 {
     char ip_address[16];
