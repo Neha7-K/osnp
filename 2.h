@@ -22,8 +22,8 @@ struct StorageServerInfo
     char ip_address[16];
     int nm_port;
     int client_port;
-     char accessible_paths[4096];
-     char storageserverpath[100];
+     char accessible_paths[1024];
+       char absolute_address[1024];
  };
 int num_clients;
 int clientarr[100];
