@@ -14,6 +14,7 @@ void processStorageServerInfo(const struct StorageServerInfo *ss_info)
         printf("IP Address: %s\n", ss_info->ip_address);
         printf("NM Port: %d\n", ss_info->nm_port);
         printf("Client Port: %d\n", ss_info->client_port);
+        printf("Address of ss: %s\n", ss_info->absolute_address);
         printf("Accessible Paths:\n%s\n", ss_info->accessible_paths);
     }
     else
@@ -28,8 +29,7 @@ void *handleStorageServer(void *arg)
 {
     struct ThreadArgs *thread_args = (struct ThreadArgs *)arg;
     char request_type = thread_args->request_type;
-      int ss_socket = thread_args->socket;
-
+    int ss_socket = thread_args->socket;
 
     // Receive storage server information
     struct StorageServerInfo ss_info;
@@ -42,30 +42,32 @@ void *handleStorageServer(void *arg)
     }
 
     processStorageServerInfo(&ss_info);
-    int count=0;
-    while(count != -1){
-    for(int i=0;i<num_clients;i++)
+    int count = 0;
+    while (count != -1)
     {
-        if(ss_info.client_port == client_com[i].storageport)
-        {   count=1;
-            client_com[i].storageport=-1;
-            if(send(ss_socket,&i, sizeof(i),0) <= 0)
+        for (int i = 0; i < num_clients; i++)
+        {
+            if (ss_info.client_port == client_com[i].storageport)
             {
-                perror("Receiving storage server info failed");
-                close(ss_socket);
-                free(thread_args);
-                pthread_exit(NULL);
-            }
-            if(send(ss_socket, client_com[i].command, sizeof(client_com[i].command),0) <= 0)
-            {
-                perror("Receiving storage server info failed");
-                close(ss_socket);
-                free(thread_args);
-                pthread_exit(NULL);
+                count = 1;
+                client_com[i].storageport = -1;
+                if (send(ss_socket, &i, sizeof(i), 0) <= 0)
+                {
+                    perror("Receiving storage server info failed");
+                    close(ss_socket);
+                    free(thread_args);
+                    pthread_exit(NULL);
+                }
+                if (send(ss_socket, client_com[i].command, sizeof(client_com[i].command), 0) <= 0)
+                {
+                    perror("Receiving storage server info failed");
+                    close(ss_socket);
+                    free(thread_args);
+                    pthread_exit(NULL);
+                }
             }
         }
-    }
-    sleep(1);
+        sleep(1);
     }
     free(thread_args);
     pthread_exit(NULL);
@@ -105,32 +107,31 @@ void *handleClient(void *arg)
     struct ThreadArgs *thread_args = (struct ThreadArgs *)arg;
     int client_socket = thread_args->socket;
     char request_type = thread_args->request_type;
-   
 
     char buffer[1024];
     memset(buffer, 0, sizeof(buffer));
-    
+
     ssize_t bytes_received = recv(client_socket, buffer, sizeof(buffer), 0);
-char a[1024];
-    strcpy(a,buffer);
-    char command[50]; 
-    char path[974];  
-    char* token = strtok(a," ");
+    char a[1024];
+    strcpy(a, buffer);
+    char command[50];
+    char path[974];
+    char *token = strtok(a, " ");
     int storage_server_port = -1;
-    strcpy(command,token);
-    if(strcmp(command,"COPY") == 0)
+    strcpy(command, token);
+    if (strcmp(command, "COPY") == 0)
     {
         char source[10000];
         char destination[100000];
-          if (sscanf(buffer, "%s %s %s", command, source, destination) != 3)
+        if (sscanf(buffer, "%s %s %s", command, source, destination) != 3)
         {
             perror("Invalid COPY command format");
             close(client_socket);
             free(thread_args);
             pthread_exit(NULL);
         }
-          int source_storage_port = -1;
-         if (findStorageServerPort(source, &source_storage_port))
+        int source_storage_port = -1;
+        if (findStorageServerPort(source, &source_storage_port))
         {
             int destination_storage_port = -1;
             if (findStorageServerPort(destination, &destination_storage_port))
@@ -139,72 +140,63 @@ char a[1024];
                 printf("File copied from %s to %s\n", source, destination);
                 storage_server_port = 0;
             }
-    }
-   
-    }
-    else{
-    while(token != NULL)
-    {
-        strcpy(path,token);
-        printf("%s\n",path);
-        token=strtok(NULL," ");
-        
-    }
-    
-    if (bytes_received <= 0)
-    {
-        perror("Receiving data from client failed");
-        close(client_socket);
-        free(thread_args);
-        pthread_exit(NULL);
-    }
-
-    printf("Received data from client: %s\n", buffer);
-  
-    strcpy(client_com[num_clients].command,buffer);
-    printf("Command from client: %s\n", command);
-    printf("Path from client: %s\n", path);
-
-    
-    
-    if (findStorageServerPort(path, &storage_server_port))
-    {
-        printf("Client requested path: %s\n", path);
-        printf("Found storage server port: %d\n", storage_server_port);
-        client_com[num_clients].storageport=storage_server_port;
-        // Send the storage server port back to the client
-        if (send(client_socket, &storage_server_port, sizeof(storage_server_port), 0) == -1)
-        {
-            perror("Sending storage server port to client failed");
         }
-        num_clients++;
-        
     }
     else
     {
-        printf("Client requested path: %s\n", path);
-        printf("Path not found in accessible paths\n");
-
-        // Send an error message to the client
-        storage_server_port = -1;
-        if (send(client_socket, &storage_server_port, sizeof(storage_server_port), 0) == -1)
+        while (token != NULL)
         {
-            perror("Sending error message to client failed");
+            strcpy(path, token);
+            printf("%s\n", path);
+            token = strtok(NULL, " ");
         }
-        num_clients++;
+
+        if (bytes_received <= 0)
+        {
+            perror("Receiving data from client failed");
+            close(client_socket);
+            free(thread_args);
+            pthread_exit(NULL);
+        }
+
+        printf("Received data from client: %s\n", buffer);
+
+        strcpy(client_com[num_clients].command, buffer);
+        printf("Command from client: %s\n", command);
+        printf("Path from client: %s\n", path);
+
+        if (findStorageServerPort(path, &storage_server_port))
+        {
+            printf("Client requested path: %s\n", path);
+            printf("Found storage server port: %d\n", storage_server_port);
+            client_com[num_clients].storageport = storage_server_port;
+            // Send the storage server port back to the client
+            if (send(client_socket, &storage_server_port, sizeof(storage_server_port), 0) == -1)
+            {
+                perror("Sending storage server port to client failed");
+            }
+            num_clients++;
+        }
+        else
+        {
+            printf("Client requested path: %s\n", path);
+            printf("Path not found in accessible paths\n");
+
+            // Send an error message to the client
+            storage_server_port = -1;
+            if (send(client_socket, &storage_server_port, sizeof(storage_server_port), 0) == -1)
+            {
+                perror("Sending error message to client failed");
+            }
+            num_clients++;
+        }
     }
 
-    
-    }
-    
     close(client_socket);
     free(thread_args);
 
     pthread_exit(NULL);
 }
-
-
-
 
 int findStorageServerPort(const char *path, int *port)
 {
@@ -213,11 +205,14 @@ int findStorageServerPort(const char *path, int *port)
     // Search for the path in the list of accessible_paths in storage_servers
     for (int i = 0; i < num_storage_servers; i++)
     {
-        if (strstr(storage_servers[i].info.accessible_paths, path) != NULL)
+        if (strncmp(storage_servers[i].info.absolute_address, path, strlen(storage_servers[i].info.absolute_address) == 0))
         {
-            *port = storage_servers[i].info.client_port;
-            pthread_mutex_unlock(&storage_servers_mutex);
-            return 1; // Path found
+            if (strstr(storage_servers[i].info.accessible_paths, path) != NULL)
+            {
+                *port = storage_servers[i].info.client_port;
+                pthread_mutex_unlock(&storage_servers_mutex);
+                return 1; // Path found
+            }
         }
     }
 
@@ -227,7 +222,7 @@ int findStorageServerPort(const char *path, int *port)
 
 int sendCommandToStorageServer(int storage_server_port, char command[])
 {
-    
+
     int ss_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (ss_socket == -1)
     {
@@ -336,7 +331,6 @@ int main()
                 free(thread_args);
                 close(client_socket);
             }
-
         }
         else
         {
