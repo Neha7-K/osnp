@@ -162,7 +162,7 @@ void readfile(struct readclient *CM)
         return;
     }
 
-    char buffer[512];
+    char buffer[8];
     // Read and send file in lines
     
     while (fgets(buffer, sizeof(buffer), file) != NULL) {
