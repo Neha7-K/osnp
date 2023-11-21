@@ -1,6 +1,6 @@
 #ifndef naming_H
 #define naming_H
-#define NAMING_SERVER_PORT 8086
+#define NAMING_SERVER_PORT 8080
 #define MAX_STORAGE_SERVERS 10
 #define LOG_LEVEL 2 
 #define PATH_MAX 1024
@@ -70,5 +70,7 @@ void displayLRUCache();
 
 void *handleClient(void *arg);
 int sendCommandToStorageServer(int storage_server_index, char command[]);
+#define NFS_FILE_NOT_FOUND 1
 
+#define COPY_FORMAT_INVALID 2
 #endif
