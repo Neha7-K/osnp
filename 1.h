@@ -1,7 +1,7 @@
 #ifndef naming_H
 #define naming_H
 #define NAMING_SERVER_PORT 8080
-#define MAX_STORAGE_SERVERS 10
+#define MAX_STORAGE_SERVERS 1000
 #define LOG_LEVEL 2 
 #define PATH_MAX 1024
 #define LOG_ERROR   LOG_ERR
