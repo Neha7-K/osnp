@@ -11,6 +11,96 @@ void logMessage(int priority, const char *format, ...)
     va_end(args);
 }
 
+
+void copyFile(const char *source, const char *destination)
+{
+    FILE *source_file = fopen(source, "rb");
+    if (!source_file)
+    {
+        perror("Error opening source file");
+        return;
+    }
+    FILE *dest_file = fopen(destination, "wb");
+    if (!dest_file)
+    {
+        perror("Error opening destination file");
+        fclose(source_file);
+        return;
+    }
+
+    char buffer[1024];
+    size_t bytesRead;
+
+    while ((bytesRead = fread(buffer, 1, sizeof(buffer), source_file)) > 0)
+    {
+        if (fwrite(buffer, 1, bytesRead, dest_file) != bytesRead)
+        {
+            perror("Error writing to destination file");
+            break;
+        }
+    }
+    fclose(source_file);
+    fclose(dest_file);
+}
+
+
+
+void copyDirectory(const char* source, const char* destination) {
+    DIR* dir;
+    struct dirent* entry;
+    struct stat statbuf;
+  char sourcePath[512];
+char destPath[512];
+
+    dir = opendir(source);
+    if (dir == NULL) {
+        printf("Failed to open source directory.\n");
+        return;
+    }
+    if (mkdir(destination, 0777) != 0 && errno != EEXIST) {
+        printf("Failed to create destination directory.\n");
+        closedir(dir);
+        return;
+    }
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+        snprintf(sourcePath, sizeof(sourcePath), "%s/%s", source, entry->d_name);
+        snprintf(destPath, sizeof(destPath), "%s/%s", destination, entry->d_name);
+        if (stat(sourcePath, &statbuf) != 0) {
+            printf("Failed to get file/directory information.\n");
+            closedir(dir);
+            return;
+        }
+        if (S_ISREG(statbuf.st_mode)) {
+            FILE* sourceFile = fopen(sourcePath, "rb");
+            FILE* destFile = fopen(destPath, "wb");
+            if (sourceFile == NULL || destFile == NULL) {
+                printf("Failed to open file for copying.\n");
+                closedir(dir);
+                return;
+            }
+
+            char buffer[1024];
+            size_t bytesRead;
+            while ((bytesRead = fread(buffer, 1, sizeof(buffer), sourceFile)) > 0) {
+                fwrite(buffer, 1, bytesRead, destFile);
+            }
+
+            fclose(sourceFile);
+            fclose(destFile);
+        }
+        else if (S_ISDIR(statbuf.st_mode)) {
+            copyDirectory(sourcePath, destPath);
+        }
+    }
+
+    closedir(dir);
+   
+}
+
 void processStorageServerInfo(const struct StorageServerInfo *ss_info)
 {
     pthread_mutex_lock(&storage_servers_mutex);
@@ -85,36 +175,7 @@ void *handleStorageServer(void *arg)
     free(thread_args);
     pthread_exit(NULL);
 }
-void copyFile(const char *source, const char *destination)
-{
-    FILE *source_file = fopen(source, "rb");
-    if (!source_file)
-    {
-        perror("Error opening source file");
-        return;
-    }
-    FILE *dest_file = fopen(destination, "wb");
-    if (!dest_file)
-    {
-        perror("Error opening destination file");
-        fclose(source_file);
-        return;
-    }
 
-    char buffer[1024];
-    size_t bytesRead;
-
-    while ((bytesRead = fread(buffer, 1, sizeof(buffer), source_file)) > 0)
-    {
-        if (fwrite(buffer, 1, bytesRead, dest_file) != bytesRead)
-        {
-            perror("Error writing to destination file");
-            break;
-        }
-    }
-    fclose(source_file);
-    fclose(dest_file);
-}
 void *handleClient(void *arg)
 {
     struct ThreadArgs *thread_args = (struct ThreadArgs *)arg;
@@ -153,6 +214,29 @@ void *handleClient(void *arg)
                 printf("File copied from %s to %s\n", source, destination);
                 storage_server_port = 0;
                  logMessage(LOG_INFO, "File copied from %s to %s", source, destination);
+            }
+        }
+    }
+    else if (strcmp(command,"COPYDIR") == 0){
+        char source[10000];
+        char destination[100000];
+        if (sscanf(buffer, "%s %s %s", command, source, destination) != 3)
+        {
+            perror("Invalid COPY command format");
+            close(client_socket);
+            free(thread_args);
+            pthread_exit(NULL);
+        }
+        int source_storage_port = -1;
+        if (findStorageServerPort(source, &source_storage_port))
+        {
+            int destination_storage_port = -1;
+            if (findStorageServerPort(destination, &destination_storage_port))
+            {
+                copyDirectory(source, destination);
+                 printf("Directory copied from %s to %s\n", source, destination);
+                storage_server_port = 0;
+                 logMessage(LOG_INFO, "Directory copied from %s to %s", source, destination);
             }
         }
     }
@@ -201,8 +285,6 @@ void *handleClient(void *arg)
             printf("Path not found in accessible paths\n");
 
               logMessage(LOG_INFO, "Path not found in accessible paths for client request: %s", path);
-
-            // Send an error message to the client
             storage_server_port = -1;
             if (send(client_socket, &storage_server_port, sizeof(storage_server_port), 0) == -1)
             {
@@ -221,19 +303,15 @@ void *handleClient(void *arg)
 int findStorageServerPort(char *path, int *port)
 {
     pthread_mutex_lock(&storage_servers_mutex);
-
-    // Search for the path in the list of accessible_paths in storage_servers
+    
     for (int i = 0; i < num_storage_servers; i++)
     {
         int l = strlen(storage_servers[i].info.absolute_address);
-        // printf("%d",l);
-        // printf("%s,%ld",storage_servers[i].info.absolute_address,strlen(storage_servers[i].info.absolute_address));
-        // printf("%s,%ld",path,strlen(path));
+
         if (strncmp(storage_servers[i].info.absolute_address, path, strlen(storage_servers[i].info.absolute_address)) == 0)
         {
-            // printf("1");
             strcpy(path, path + strlen(storage_servers[i].info.absolute_address));
-            char newPath[strlen(path) + 2]; // +2 for the dot and null terminator
+            char newPath[strlen(path) + 2]; 
             strcpy(newPath, ".");
             strcat(newPath, path);
             strcpy(path, newPath);
@@ -241,13 +319,13 @@ int findStorageServerPort(char *path, int *port)
             {
                 *port = storage_servers[i].info.client_port;
                 pthread_mutex_unlock(&storage_servers_mutex);
-                return 1; // Path found
+                return 1; 
             }
         }
     }
 
     pthread_mutex_unlock(&storage_servers_mutex);
-    return 0; // Path not found
+    return 0; 
 }
 
 int sendCommandToStorageServer(int storage_server_port, char command[])
