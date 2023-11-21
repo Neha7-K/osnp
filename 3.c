@@ -33,7 +33,7 @@ void communicateWithStorageServer(int storage_server_port)
      
   
    while (1)
-    {   char buffer[4096];
+    {   char buffer[512];
         if(recv(ss_socket, buffer, sizeof(buffer) - 1, 0) <= 0)
     {
         continue;
