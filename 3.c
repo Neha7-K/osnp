@@ -60,10 +60,6 @@ void communicateWithStorageServer(int storage_server_port)
         memset(buffer, 0, sizeof(buffer));
     }
 
-    if (bytes_received == -1)
-    {
-        perror("Receiving data failed");
-    }
     close(ss_socket);
 }
 
