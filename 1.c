@@ -205,9 +205,20 @@ int findStorageServerPort(const char *path, int *port)
     // Search for the path in the list of accessible_paths in storage_servers
     for (int i = 0; i < num_storage_servers; i++)
     {
-        if (strncmp(storage_servers[i].info.absolute_address, path, strlen(storage_servers[i].info.absolute_address) == 0))
+        printf("a");
+
+        if (strstr(storage_servers[i].info.absolute_address, path) == 0)
         {
-            if (strstr(storage_servers[i].info.accessible_paths, path) != NULL)
+            printf("1");
+            char checkpath[1024];
+            strcpy(checkpath,path);
+            strcpy(checkpath, checkpath + strlen(storage_servers[i].info.absolute_address));
+            char newPath[strlen(checkpath) + 2];  // +2 for the dot and null terminator
+            strcpy(newPath, ".");
+            strcat(newPath, checkpath);
+            strcpy(checkpath, newPath);
+            printf("%s\n",newPath);
+            if (strstr(storage_servers[i].info.accessible_paths, newPath) != NULL)
             {
                 *port = storage_servers[i].info.client_port;
                 pthread_mutex_unlock(&storage_servers_mutex);
