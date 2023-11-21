@@ -19,6 +19,7 @@ struct StorageServerInfo
     int nm_port;
     int client_port;
     char accessible_paths[1024];
+    char absolute_address[1024];
 };
 extern struct StorageServerInfo storageServerInfo;
 
@@ -31,7 +32,8 @@ struct StorageServer
 {
     struct StorageServerInfo info;
 };
-struct comclient{
+struct comclient
+{
     int storageport;
     char command[10000];
 };
