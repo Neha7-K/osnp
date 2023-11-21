@@ -198,27 +198,26 @@ void *handleClient(void *arg)
     pthread_exit(NULL);
 }
 
-int findStorageServerPort(const char *path, int *port)
+int findStorageServerPort(char *path, int *port)
 {
     pthread_mutex_lock(&storage_servers_mutex);
 
     // Search for the path in the list of accessible_paths in storage_servers
     for (int i = 0; i < num_storage_servers; i++)
     {
-        printf("a");
-
-        if (strstr(storage_servers[i].info.absolute_address, path) == 0)
+        int l=strlen(storage_servers[i].info.absolute_address);
+       // printf("%d",l);
+        //printf("%s,%ld",storage_servers[i].info.absolute_address,strlen(storage_servers[i].info.absolute_address));
+        // printf("%s,%ld",path,strlen(path));
+        if (strncmp(storage_servers[i].info.absolute_address, path, strlen(storage_servers[i].info.absolute_address))== 0)
         {
-            printf("1");
-            char checkpath[1024];
-            strcpy(checkpath,path);
-            strcpy(checkpath, checkpath + strlen(storage_servers[i].info.absolute_address));
-            char newPath[strlen(checkpath) + 2];  // +2 for the dot and null terminator
+           // printf("1");
+            strcpy(path, path + strlen(storage_servers[i].info.absolute_address));
+            char newPath[strlen(path) + 2];  // +2 for the dot and null terminator
             strcpy(newPath, ".");
-            strcat(newPath, checkpath);
-            strcpy(checkpath, newPath);
-            printf("%s\n",newPath);
-            if (strstr(storage_servers[i].info.accessible_paths, newPath) != NULL)
+            strcat(newPath, path);
+            strcpy(path, newPath);
+            if (strstr(storage_servers[i].info.accessible_paths, path) != NULL)
             {
                 *port = storage_servers[i].info.client_port;
                 pthread_mutex_unlock(&storage_servers_mutex);
