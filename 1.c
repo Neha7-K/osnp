@@ -276,7 +276,7 @@ void *handleClient(void *arg)
         char destination[100000];
         if (sscanf(buffer, "%s %s %s", command, source, destination) != 3)
         {
-             perror("Invalid COPY command format");
+            perror("Invalid COPY command format");
             int error_code = 2;
             if (send(client_socket, &error_code, sizeof(error_code), 0) == -1)
             {
@@ -304,12 +304,7 @@ void *handleClient(void *arg)
         char destination[100000];
         if (sscanf(buffer, "%s %s %s", command, source, destination) != 3)
         {
-             perror("Invalid COPY command format");
-            int error_code = 2;
-            if (send(client_socket, &error_code, sizeof(error_code), 0) == -1)
-            {
-                perror("Sending error code to client failed");
-            }
+            perror("Invalid COPY command format");
             close(client_socket);
             free(thread_args);
             pthread_exit(NULL);
@@ -373,10 +368,9 @@ void *handleClient(void *arg)
 
               logMessage(LOG_INFO, "Path not found in accessible paths for client request: %s", path);
             storage_server_port = -1;
-            int error_code = 1;
-            if (send(client_socket, &error_code, sizeof(error_code), 0) == -1)
+            if (send(client_socket, &storage_server_port, sizeof(storage_server_port), 0) == -1)
             {
-                perror("Sending error code to client failed");
+                perror("Sending error message to client failed");
             }
             num_clients++;
         }
