@@ -155,7 +155,7 @@ void getper(int i,char* path)
     sprintf(fileSizeString, "File Size: %lld bytes\n", (long long)fileInfo.st_size);
 
     // Store file permissions in a string
-    char filePermissionsString[20];
+    char filePermissionsString[100];
     sprintf(filePermissionsString, "File Permissions: %s%s%s%s%s%s%s%s%s%s\n",
             (S_ISDIR(fileInfo.st_mode)) ? "d" : "-",
             (fileInfo.st_mode & S_IRUSR) ? "r" : "-",
@@ -201,17 +201,17 @@ void *sendInfoToNamingServer(void *arg)
     int ns_socket = *((int *)arg);
 
     // Get the absolute path of the current working directory
-    char current_directory[PATH_MAX];
-    if (getcwd(current_directory, sizeof(current_directory)) == NULL)
-    {
-        perror("Getting current working directory failed");
-        exit(1);
-    }
+    // char current_directory[PATH_MAX];
+    // if (getcwd(current_directory, sizeof(current_directory)) == NULL)
+    // {
+    //     perror("Getting current working directory failed");
+    //     exit(1);
+    // }
 
     // Collect accessible paths starting from the absolute path
     char accessible_paths[4096];
     int current_pos = 0;
-    collectAccessiblePaths(current_directory, accessible_paths, &current_pos, sizeof(accessible_paths));
+    collectAccessiblePaths(".", accessible_paths, &current_pos, sizeof(accessible_paths));
     accessible_paths[current_pos] = '\0';
 
     // Prepare storage server information
@@ -220,7 +220,12 @@ void *sendInfoToNamingServer(void *arg)
     ss_info.nm_port = NAMING_SERVER_PORT;    // Update with the actual port
     ss_info.client_port = STORAGE_SERVER_PORT;
     strcpy(ss_info.accessible_paths, accessible_paths);
-
+      if (getcwd(ss_info.absolute_address, sizeof(ss_info.absolute_address)) == NULL)
+    {
+        perror("Getting current absolute address failed");
+        exit(1);
+    }
+     printf("%s\n",ss_info.absolute_address);
     // Send request type to the naming server
     char request_type = 'I';
     if (send(ns_socket, &request_type, sizeof(request_type), 0) == -1)
@@ -235,7 +240,7 @@ void *sendInfoToNamingServer(void *arg)
     // Introduce a delay before sending the storage server information
 
     // Send storage server information to the naming server
-    if (send(ns_socket, &ss_info, sizeof(struct StorageServerInfo), 0) == -1)
+    if (send(ns_socket, &ss_info, sizeof(ss_info), 0) == -1)
     {
         perror("Sending storage server info to naming server failed");
         close(ns_socket);
