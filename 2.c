@@ -64,21 +64,22 @@ void createDirectory()
     }
     printf("Empty directory created: new_directory\n");
 }
-void readfile(int i, const char *path)
+void readfile(int i, char *path)
 {
+   // printf("abcd");
     FILE *file = fopen(path, "rb");
     if (file == NULL)
     {
         perror("Unable to open file");
         return;
     }
-
-    char buffer[4096];
+    char buffer[400];
     size_t bytes_read;
-
+    // printf("abcdds");
     // Read and send file in chunks
     while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0)
     {
+       // printf("%ld",bytes_read);
         if (send(clientarr[i], buffer, bytes_read, 0) == -1)
         {
             perror("Sending file content failed");
@@ -87,65 +88,68 @@ void readfile(int i, const char *path)
             return;
         }
     }
-
+    // printf("abcdaaaa");
     // Send a completion message
     const char *completionMessage = "STOP";
     if (send(clientarr[i], completionMessage, strlen(completionMessage), 0) == -1)
     {
         perror("Sending completion message failed");
     }
-
+    // printf("abcdaa");
     // Close the file
     fclose(file);
     close(clientarr[i]);
 }
-void removestrings(char* str,char* sub)
+void removestrings(char *str, char *sub)
 {
-     size_t len = strlen(sub);
+    size_t len = strlen(sub);
 
-    while ((str = strstr(str, sub)) != NULL) {
+    while ((str = strstr(str, sub)) != NULL)
+    {
         memmove(str, str + len, strlen(str + len) + 1);
     }
-
 }
 
-void trim(char *str) {
+void trim(char *str)
+{
     // Trim leading spaces
-    while (isspace((unsigned char)*str)) {
+    while (isspace((unsigned char)*str))
+    {
         str++;
     }
 
     // Trim trailing spaces
     size_t len = strlen(str);
-    while (len > 0 && isspace((unsigned char)str[len - 1])) {
+    while (len > 0 && isspace((unsigned char)str[len - 1]))
+    {
         len--;
     }
 
     // Null-terminate the trimmed string
     str[len] = '\0';
 }
-void writefile(char* content,char* path)
+void writefile(char *content, char *path)
 {
     FILE *file = fopen(path, "w");
 
     // Check if the file was opened successfully
-    if (file == NULL) {
+    if (file == NULL)
+    {
         fprintf(stderr, "Unable to open file: %s\n", path);
-        return ; // Exit with an error code
+        return; // Exit with an error code
     }
 
-    
     fprintf(file, "%s\n", content);
 
-   
     fclose(file);
 }
-void getper(int i,char* path)
+void getper(int i, char *path)
 {
     struct stat fileInfo;
 
     // Use stat to get information about the file
-    if (stat(path, &fileInfo) != 0) {
+    if (stat(path, &fileInfo) != 0)
+    {
         perror("Error in stat");
         return;
     }
@@ -220,12 +224,12 @@ void *sendInfoToNamingServer(void *arg)
     ss_info.nm_port = NAMING_SERVER_PORT;    // Update with the actual port
     ss_info.client_port = STORAGE_SERVER_PORT;
     strcpy(ss_info.accessible_paths, accessible_paths);
-      if (getcwd(ss_info.absolute_address, sizeof(ss_info.absolute_address)) == NULL)
+    if (getcwd(ss_info.absolute_address, sizeof(ss_info.absolute_address)) == NULL)
     {
         perror("Getting current absolute address failed");
         exit(1);
     }
-     printf("%s\n",ss_info.absolute_address);
+    printf("%s\n", ss_info.absolute_address);
     // Send request type to the naming server
     char request_type = 'I';
     if (send(ns_socket, &request_type, sizeof(request_type), 0) == -1)
@@ -252,75 +256,93 @@ void *sendInfoToNamingServer(void *arg)
     pthread_exit(NULL);
 }
 
-
 void *receiveCommandsFromNamingServer(void *arg)
 {
     int ns_socket = *((int *)arg);
 
     char command[MAX_COMMAND_SIZE];
-  while(1){
-    int i;
-    if(recv(ns_socket,&i,sizeof(i),0) == -1)
+    while (1)
     {
-        continue;
+        int i;
+        if (recv(ns_socket, &i, sizeof(i), 0) == -1)
+        {
+            continue;
+        }
+        if (recv(ns_socket, command, sizeof(command), 0) == -1)
+        {
+            continue;
+        }
+        if (strcmp(command, "") == 0)
+            continue;
+        printf("Received command: %s\n", command);
+        // char a[1024];
+        // strcpy(a, command);
+        // char *token = strtok(a, " ");
+        // char command1[strlen(token)];
+        // strcpy(command1, token);
+        // printf("...%s..", command1);
+        // char path[100];
+        // while (token != NULL)
+        // {
+        //     strcpy(path, token);
+        //     token = strtok(NULL, " ");
+        // }
+        char a[1024];
+        strcpy(a, command);
+
+        char *token = strtok(a, " ");
+        char command1[50]; // Adjust the size as needed
+          char path[100];
+        if (token != NULL)
+        {
+            strcpy(command1, token);
+            printf("Command: %s\n", command1);
+
+           
+            while ((token = strtok(NULL, " ")) != NULL)
+            {
+                strcpy(path, token);
+                printf("Path: %s\n", path);
+            }
+        }
+       // printf("%s",command1);
+        if (strcmp(command1, "CREATEFILE") == 0)
+        {
+            createFile();
+        }
+        else if (strcmp(command1, "CREATEDIRECTORY") == 0)
+        {
+            createDirectory();
+        }
+        else if (strncmp(command1, "READ",4) == 0)
+        {
+           // printf("1");
+            readfile(i, path);
+        }
+        else if (strcmp(command1, "WRITE") == 0)
+        {
+            removestrings(command, command1);
+            removestrings(command, path);
+            trim(command);
+            printf("%s\n", command);
+            writefile(command, path);
+        }
+        else if (strcmp(command1, "GET") == 0)
+        {
+            getper(i, path);
+        }
+        else
+        {
+            printf("Invalid command\n");
+        }
+        fflush(stdout);
     }
-    if (recv(ns_socket, command, sizeof(command), 0) == -1)
-    {
-        continue;
-    }
-  if(strcmp(command,"") == 0)
-  continue;
-    printf("Received command: %s\n", command);
-    char a[1024];
-    strcpy(a,command);
-    char* token=strtok(a," ");
-    char command1[strlen(token)];
-    
-    strcpy(command1,token);
-    char path[100];
-    while(token != NULL){
-        strcpy(path,token);
-       token=strtok(NULL," ");
-    }
-   
-    if (strcmp(command1, "CREATEFILE") == 0)
-    {
-        createFile();
-    }
-    else if (strcmp(command1, "CREATEDIRECTORY") == 0)
-    {
-        createDirectory();
-    }
-    else if(strcmp(command1,"READ") == 0)
-    {
-        readfile(i,path);
-    }
-    else if(strcmp(command1,"WRITE") == 0)
-    {
-        removestrings(command,command1);
-        removestrings(command,path);
-        trim(command);
-        printf("%s\n",command);
-        writefile(command,path);
-    }
-    else if(strcmp(command1,"GET") == 0)
-    {
-        getper(i,path);
-    }
-    else
-    {
-        printf("Invalid command\n");
-    }
-  }
     pthread_exit(NULL);
 }
 
 void *handleClientRequest(void *arg)
 {
     int client_socket = *((int *)arg);
-
-   
- 
 
     close(client_socket);
     pthread_exit(NULL);
@@ -393,7 +415,7 @@ int main()
     while (1)
     {
         int client_socket = accept(ss_socket, NULL, NULL);
-        clientarr[num_clients++]=client_socket;
+        clientarr[num_clients++] = client_socket;
         if (client_socket == -1)
         {
             perror("Accepting client connection failed");
