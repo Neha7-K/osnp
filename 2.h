@@ -34,6 +34,13 @@ void sendStorageServerInfoToNamingServer(int ns_socket, const struct StorageServ
 void *sendInfoToNamingServer(void *arg);
 void *receiveCommandsFromNamingServer(void *arg);
 void *handleClientRequest(void *arg);
+pthread_t clientread[100];
+struct readclient
+{
+  int clienti;
+  char clientpath[100];
+};
+
 
 
 #endif
