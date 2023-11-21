@@ -2,6 +2,11 @@
 #define naming_H
 #define NAMING_SERVER_PORT 8080
 #define MAX_STORAGE_SERVERS 10
+#define LOG_LEVEL 2 
+#define LOG_ERROR   LOG_ERR
+#define LOG_INFO    LOG_INFO
+#define LOG_DEBUG   LOG_DEBUG
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,7 +16,10 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 #include <dirent.h>
+#include <syslog.h>
 #include <sys/stat.h>
+
+#include <stdarg.h>
 #include <time.h>
 struct StorageServerInfo
 {
@@ -43,7 +51,7 @@ struct StorageServer storage_servers[MAX_STORAGE_SERVERS];
 int num_storage_servers = 0;
 void processStorageServerInfo(const struct StorageServerInfo *ss_info);
 void *handleStorageServer(void *arg);
-int findStorageServerPort(const char *path, int *port);
+int findStorageServerPort(char *path, int *port);
 void *handleClient(void *arg);
 int sendCommandToStorageServer(int storage_server_index, char command[]);
 
