@@ -3,6 +3,82 @@
 
 pthread_mutex_t storage_servers_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+// Function to display the contents of the LRU cache
+void displayLRUCache()
+{
+    struct Node *current = head;
+    while (current != NULL)
+    {
+        printf("IP Address: %s, NM Port: %d, Client Port: %d\n", current->data.ip_address, current->data.nm_port,current->data.client_port);
+        current = current->next;
+    }
+}
+
+
+void updateLRUCache(const struct StorageServerInfo *ss_info)
+{
+    // Check if the storage server info is already in the cache
+    struct Node *current = head;
+    while (current != NULL)
+    {
+        if (strcmp(current->data.absolute_address, ss_info->absolute_address) == 0)
+        {
+            // Move the accessed node to the front of the list (MRU position)
+            if (current != head)
+            {
+                if (current == tail)
+                {
+                    tail = current->prev;
+                    tail->next = NULL;
+                }
+                else
+                {
+                    current->prev->next = current->next;
+                    current->next->prev = current->prev;
+                }
+
+                current->next = head;
+                current->prev = NULL;
+                head->prev = current;
+                head = current;
+            }
+            return; // Node found and updated
+        }
+        current = current->next;
+    }
+
+    // If the cache is full, remove the least recently used node (tail)
+    if (head != NULL && cacheSize > 0 && cacheSize == num_storage_servers)
+    {
+        struct Node *temp = tail;
+        tail = tail->prev;
+        if (tail != NULL)
+        {
+            tail->next = NULL;
+        }
+        free(temp);
+    }
+
+    // Add the new storage server info to the front of the list
+    struct Node *newNode = (struct Node *)malloc(sizeof(struct Node));
+    newNode->data = *ss_info;
+    newNode->next = head;
+    newNode->prev = NULL;
+
+    if (head != NULL)
+    {
+        head->prev = newNode;
+    }
+    head = newNode;
+
+    // If it's the first node, update the tail
+    if (tail == NULL)
+    {
+        tail = head;
+    }
+}
+
+
 void logMessage(int priority, const char *format, ...)
 {
     va_list args;
@@ -120,7 +196,7 @@ void processStorageServerInfo(const struct StorageServerInfo *ss_info)
     {
         printf("Storage server array is full. Cannot store information for SS: %s:%d\n", ss_info->ip_address, ss_info->nm_port);
     }
-
+ displayLRUCache();
     pthread_mutex_unlock(&storage_servers_mutex);
 }
 
@@ -303,15 +379,48 @@ void *handleClient(void *arg)
 int findStorageServerPort(char *path, int *port)
 {
     pthread_mutex_lock(&storage_servers_mutex);
-    
+
+    // Check if the storage server info is already in the cache
+    struct Node *current = head;
+    while (current != NULL)
+    {
+        int len=strlen(current->data.absolute_address);
+        if (strncmp(current->data.absolute_address, path,len) == 0)
+        {
+            *port = current->data.client_port;
+            // Move the accessed node to the front of the list (MRU position)
+            if (current != head)
+            {
+                if (current == tail)
+                {
+                    tail = current->prev;
+                    tail->next = NULL;
+                }
+                else
+                {
+                    current->prev->next = current->next;
+                    current->next->prev = current->prev;
+                }
+
+                current->next = head;
+                current->prev = NULL;
+                head->prev = current;
+                head = current;
+            }
+
+            pthread_mutex_unlock(&storage_servers_mutex);
+            return 1; 
+        }
+        current = current->next;
+    }
+
     for (int i = 0; i < num_storage_servers; i++)
     {
         int l = strlen(storage_servers[i].info.absolute_address);
-
-        if (strncmp(storage_servers[i].info.absolute_address, path, strlen(storage_servers[i].info.absolute_address)) == 0)
+        if (strncmp(storage_servers[i].info.absolute_address, path, l) == 0)
         {
-            strcpy(path, path + strlen(storage_servers[i].info.absolute_address));
-            char newPath[strlen(path) + 2]; 
+            strcpy(path, path + l);
+            char newPath[strlen(path) + 2]; // +2 for the dot and null terminator
             strcpy(newPath, ".");
             strcat(newPath, path);
             strcpy(path, newPath);
@@ -319,13 +428,14 @@ int findStorageServerPort(char *path, int *port)
             {
                 *port = storage_servers[i].info.client_port;
                 pthread_mutex_unlock(&storage_servers_mutex);
-                return 1; 
+                updateLRUCache(&storage_servers[i].info);
+                return 1; // Path found, cache updated
             }
         }
     }
 
     pthread_mutex_unlock(&storage_servers_mutex);
-    return 0; 
+    return 0; // Path not found
 }
 
 int sendCommandToStorageServer(int storage_server_port, char command[])
