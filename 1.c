@@ -1,6 +1,15 @@
+
 #include "1.h"
 
 pthread_mutex_t storage_servers_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+void logMessage(int priority, const char *format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    vsyslog(priority, format, args);
+    va_end(args);
+}
 
 void processStorageServerInfo(const struct StorageServerInfo *ss_info)
 {
@@ -40,7 +49,8 @@ void *handleStorageServer(void *arg)
         free(thread_args);
         pthread_exit(NULL);
     }
-
+    logMessage(LOG_INFO, "Received storage server information from IP: %s, Port: %d",
+               ss_info.ip_address, ss_info.nm_port);
     processStorageServerInfo(&ss_info);
     int count = 0;
     while (count != -1)
@@ -51,6 +61,8 @@ void *handleStorageServer(void *arg)
             {
                 count = 1;
                 client_com[i].storageport = -1;
+                logMessage(LOG_INFO, "Received information for SS: IP Address: %s, NM Port: %d, Client Port: %d, Absolute Address: %s",
+                           ss_info.ip_address, ss_info.nm_port, ss_info.client_port, ss_info.absolute_address);
                 if (send(ss_socket, &i, sizeof(i), 0) <= 0)
                 {
                     perror("Receiving storage server info failed");
@@ -65,6 +77,7 @@ void *handleStorageServer(void *arg)
                     free(thread_args);
                     pthread_exit(NULL);
                 }
+
             }
         }
         sleep(1);
@@ -139,6 +152,7 @@ void *handleClient(void *arg)
                 copyFile(source, destination);
                 printf("File copied from %s to %s\n", source, destination);
                 storage_server_port = 0;
+                 logMessage(LOG_INFO, "File copied from %s to %s", source, destination);
             }
         }
     }
@@ -169,6 +183,10 @@ void *handleClient(void *arg)
         {
             printf("Client requested path: %s\n", path);
             printf("Found storage server port: %d\n", storage_server_port);
+
+              // Log client request information
+            logMessage(LOG_INFO, "Client requested path: %s", path);
+            logMessage(LOG_INFO, "Found storage server port: %d", storage_server_port);
             client_com[num_clients].storageport = storage_server_port;
             // Send the storage server port back to the client
             if (send(client_socket, &storage_server_port, sizeof(storage_server_port), 0) == -1)
@@ -181,6 +199,8 @@ void *handleClient(void *arg)
         {
             printf("Client requested path: %s\n", path);
             printf("Path not found in accessible paths\n");
+
+              logMessage(LOG_INFO, "Path not found in accessible paths for client request: %s", path);
 
             // Send an error message to the client
             storage_server_port = -1;
@@ -205,15 +225,15 @@ int findStorageServerPort(char *path, int *port)
     // Search for the path in the list of accessible_paths in storage_servers
     for (int i = 0; i < num_storage_servers; i++)
     {
-        int l=strlen(storage_servers[i].info.absolute_address);
-       // printf("%d",l);
-        //printf("%s,%ld",storage_servers[i].info.absolute_address,strlen(storage_servers[i].info.absolute_address));
+        int l = strlen(storage_servers[i].info.absolute_address);
+        // printf("%d",l);
+        // printf("%s,%ld",storage_servers[i].info.absolute_address,strlen(storage_servers[i].info.absolute_address));
         // printf("%s,%ld",path,strlen(path));
-        if (strncmp(storage_servers[i].info.absolute_address, path, strlen(storage_servers[i].info.absolute_address))== 0)
+        if (strncmp(storage_servers[i].info.absolute_address, path, strlen(storage_servers[i].info.absolute_address)) == 0)
         {
-           // printf("1");
+            // printf("1");
             strcpy(path, path + strlen(storage_servers[i].info.absolute_address));
-            char newPath[strlen(path) + 2];  // +2 for the dot and null terminator
+            char newPath[strlen(path) + 2]; // +2 for the dot and null terminator
             strcpy(newPath, ".");
             strcat(newPath, path);
             strcpy(path, newPath);
@@ -275,6 +295,8 @@ int sendCommandToStorageServer(int storage_server_port, char command[])
 
 int main()
 {
+
+    openlog("NamingServer", LOG_PID, LOG_USER);
     int ns_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (ns_socket == -1)
     {
@@ -348,6 +370,7 @@ int main()
             close(client_socket);
         }
     }
+      closelog();
     close(ns_socket);
     return 0;
 }
