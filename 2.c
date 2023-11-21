@@ -121,35 +121,31 @@ void deleteDirectory(const char *dir_path)
 }
 void readfile(int i, char *path)
 {
-   // printf("abcd");
-    FILE *file = fopen(path, "rb");
-    if (file == NULL)
-    {
+FILE *file = fopen(path, "rb");
+    if (file == NULL) {
         perror("Unable to open file");
         return;
     }
-    char buffer[400];
-    size_t bytes_read;
 
-    while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0)
-    {
-       // printf("%ld",bytes_read);
-        if (send(clientarr[i], buffer, bytes_read, 0) == -1)
-        {
+    char buffer[4096];
+
+    // Read and send file in lines
+    while (fgets(buffer, sizeof(buffer), file) != NULL) {
+        // Send the buffer over the network
+        if (send(clientarr[i], buffer, strlen(buffer), 0) == -1) {
             perror("Sending file content failed");
             fclose(file);
             close(clientarr[i]);
             return;
         }
     }
-    // printf("abcdaaaa");
+
     // Send a completion message
     const char *completionMessage = "STOP";
-    if (send(clientarr[i], completionMessage, strlen(completionMessage), 0) == -1)
-    {
+    if (send(clientarr[i], completionMessage, strlen(completionMessage), 0) == -1) {
         perror("Sending completion message failed");
     }
-    // printf("abcdaa");
+
     // Close the file
     fclose(file);
     close(clientarr[i]);
@@ -309,6 +305,13 @@ void *receiveCommandsFromNamingServer(void *arg)
 
         char *token = strtok(a, " ");
         char command1[50]; // Adjust the size as needed
+        if(token != NULL)
+    strcpy(command1,token);
+    else
+    {
+        token=strtok(NULL," ");
+        strcpy(command1,token);
+    }
           char path[100];
         if (token != NULL)
         {
