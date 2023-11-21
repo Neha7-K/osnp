@@ -1,18 +1,12 @@
-
 #include "3.h"
 void trim(char *str) {
-    // Trim leading spaces
     while (isspace((unsigned char)*str)) {
         str++;
     }
-
-    // Trim trailing spaces
     size_t len = strlen(str);
     while (len > 0 && isspace((unsigned char)str[len - 1])) {
         len--;
     }
-
-    // Null-terminate the trimmed string
     str[len] = '\0';
 }
 void communicateWithStorageServer(int storage_server_port)
@@ -117,8 +111,6 @@ int main()
     if (storage_server_port > 0)
     {
         printf("Storage server port for path '%s': %d\n", path, storage_server_port);
-
-        // Communicate with the storage server
         communicateWithStorageServer(storage_server_port);
     }
     else
