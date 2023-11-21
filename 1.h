@@ -1,8 +1,9 @@
 #ifndef naming_H
 #define naming_H
-#define NAMING_SERVER_PORT 8080
+#define NAMING_SERVER_PORT 8086
 #define MAX_STORAGE_SERVERS 10
 #define LOG_LEVEL 2 
+#define PATH_MAX 1024
 #define LOG_ERROR   LOG_ERR
 #define LOG_INFO    LOG_INFO
 #define LOG_DEBUG   LOG_DEBUG
@@ -17,6 +18,7 @@
 #include <pthread.h>
 #include <dirent.h>
 #include <syslog.h>
+#include <errno.h>
 #include <sys/stat.h>
 
 #include <stdarg.h>
