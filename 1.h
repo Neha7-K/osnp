@@ -47,6 +47,16 @@ struct comclient
     int storageport;
     char command[10000];
 };
+
+
+struct Node {
+    struct StorageServerInfo data;
+    struct Node *next;
+    struct Node *prev;
+};
+struct Node *head = NULL;
+struct Node *tail = NULL;
+
 struct comclient client_com[10];
 int num_clients;
 struct StorageServer storage_servers[MAX_STORAGE_SERVERS];
@@ -54,6 +64,10 @@ int num_storage_servers = 0;
 void processStorageServerInfo(const struct StorageServerInfo *ss_info);
 void *handleStorageServer(void *arg);
 int findStorageServerPort(char *path, int *port);
+int cacheSize = 5; // Set the desired cache size
+void updateLRUCache(const struct StorageServerInfo *ss_info);
+void displayLRUCache();
+
 void *handleClient(void *arg);
 int sendCommandToStorageServer(int storage_server_index, char command[]);
 
